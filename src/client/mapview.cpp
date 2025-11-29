@@ -187,6 +187,35 @@ void MapView::drawFloor(short floor, const Position& cameraPosition, const TileP
 
     // light
     if (m_lightView) {
+        // Extended light range to fix pop-in
+        const int lightRange = 15;
+        int halfWidth = m_drawDimension.width() / 2;
+        int halfHeight = m_drawDimension.height() / 2;
+        
+        for (int x = -halfWidth - lightRange; x <= halfWidth + lightRange; ++x) {
+            for (int y = -halfHeight - lightRange; y <= halfHeight + lightRange; ++y) {
+                if (x >= -halfWidth && x <= halfWidth && y >= -halfHeight && y <= halfHeight)
+                    continue;
+
+                Position pos = cameraPosition.translated(x, y);
+                if (!pos.isValid()) continue;
+
+                TilePtr tile = g_map.getTile(pos);
+                if (!tile) continue;
+
+                Point tileDrawPos = transformPositionTo2D(pos, cameraPosition);
+
+                for (const ThingPtr& thing : tile->getThings()) {
+                    if (thing->isCreature() && thing->static_self_cast<Creature>()->isWalking()) continue;
+                    
+                    Light light = thing->getLight();
+                    if (light.intensity > 0) {
+                        m_lightView->addLight(tileDrawPos + thing->getDisplacement() + light.pos, light.color, light.intensity);
+                    }
+                }
+            }
+        }
+
         for (auto& tile : tiles) {
             Point tileDrawPos = transformPositionTo2D(tile->getPosition(), cameraPosition);
             ItemPtr ground = tile->getGround();

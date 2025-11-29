@@ -428,8 +428,10 @@ void LocalPlayer::updateWalk()
         }
 
         m_lastPrewalkDone = true;
-        // In offline mode, clear prewalk immediately - no need to wait for server
-        m_preWalking.clear();
+        // In offline mode, only remove the finished step
+        if (!m_preWalking.empty()) {
+            m_preWalking.pop_front();
+        }
         g_logger.info("[CRASH DEBUG] Offline walk update completed successfully");
         // Don't call terminateWalk() - just mark as done
         return;

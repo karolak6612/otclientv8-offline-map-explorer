@@ -4,23 +4,16 @@ local fileList = nil
 local currentPath = "/"
 local onFileSelectCallback = nil
 
-function FileBrowser.init()
-  -- UI is defined in mapexplorer.otui
-end
-
-function FileBrowser.terminate()
-  fileList = nil
-end
-
-function FileBrowser.setPanel(panel)
-  fileList = panel:getChildById('fileList')
+function FileBrowser.init(listWidget)
+  fileList = listWidget
   
-  -- Initial load
-  local lastPath = g_settings.getString('mapexplorer/lastPath', '/data/things/')
-  if not g_resources.directoryExists(lastPath) then
-    lastPath = '/'
+  if not fileList then
+    g_logger.error("FileBrowser: No list widget provided")
+    return
   end
-  FileBrowser.setPath(lastPath)
+  
+  -- Initial path
+  FileBrowser.setPath(g_resources.getWorkDir() .. "data/things/")
 end
 
 function FileBrowser.setPath(path)

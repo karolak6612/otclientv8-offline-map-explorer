@@ -75,6 +75,7 @@ ExplorerPanel < MainWindow
   !text: tr('Explorer Tools')
   size: 250 300
   visible: false
+  focusable: false
   
   Label
     !text: tr('Teleport')
@@ -112,6 +113,7 @@ ExplorerPanel < MainWindow
     anchors.left: prev.right
     anchors.right: parent.right
     margin-left: 5
+    focusable: false
     @onClick: MapExplorer.onTeleport()
     
   HorizontalSeparator
@@ -126,6 +128,7 @@ ExplorerPanel < MainWindow
     anchors.left: parent.left
     margin-top: 10
     width: 20
+    focusable: false
     @onCheckChange: MapExplorer.toggleNoClip(self:isChecked())
 
   Label
@@ -157,6 +160,7 @@ ExplorerPanel < MainWindow
     maximum: 255
     step: 1
     value: 255
+    focusable: false
     @onValueChange: MapExplorer.onLightChange(self:getValue())
 
   Label
@@ -175,13 +179,16 @@ ExplorerPanel < MainWindow
     maximum: 2000
     step: 50
     value: 200
+    focusable: false
     @onValueChange: MapExplorer.onSpeedChange(self:getValue())
     
   Button
+    id: outfitButton
     !text: tr('Change Outfit')
     anchors.bottom: parent.bottom
     anchors.left: parent.left
     anchors.right: parent.right
-    @onClick: MapExplorer.openOutfitWindow()
+    focusable: false
+    @onClick: MapExplorerOutfit.openWindow()
 
 MapExplorerWindow
