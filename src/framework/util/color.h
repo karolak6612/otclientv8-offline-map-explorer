@@ -39,6 +39,7 @@ public:
     Color(uint8 r, uint8 g, uint8 b, uint8 a = 0xFF) : m_r(r/255.0f), m_g(g/255.0f), m_b(b/255.0f), m_a(a/255.0f) { }
     Color(int r, int g, int b, int a = 0xFF) : m_r(r/255.0f), m_g(g/255.0f), m_b(b/255.0f), m_a(a/255.0f) { }
     Color(float r, float g, float b, float a = 1.0f) : m_r(r), m_g(g), m_b(b), m_a(a) { }
+    Color(const Color& other) : m_r(other.m_r), m_g(other.m_g), m_b(other.m_b), m_a(other.m_a) { }
     Color(const std::string& coltext);
 
     uint8 a() const { return 255.0f * m_a; }
@@ -81,7 +82,7 @@ public:
             std::min<float>(1.0f, m_b + other.m_b), std::min<float>(1.0f, m_a + other.m_a));
     }
 
-    Color& operator=(const Color& other) { m_r = other.m_r; m_g = other.m_g; m_b = other.m_b; m_a = other.m_a; return *this; }
+    Color& operator=(const Color& other) = default;
     bool operator==(const Color& other) const {
         if (std::abs(other.m_r - m_r) > 0.001) return false;
         if (std::abs(other.m_g - m_g) > 0.001) return false;

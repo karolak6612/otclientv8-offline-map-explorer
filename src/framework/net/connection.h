@@ -27,6 +27,7 @@
 #include <framework/luaengine/luaobject.h>
 #include <framework/core/timer.h>
 #include <framework/core/declarations.h>
+#include <boost/asio.hpp>
 
 class Connection : public LuaObject
 {
@@ -67,9 +68,9 @@ public:
     ConnectionPtr asConnection() { return static_self_cast<Connection>(); }
 
 protected:
-    void internal_connect(asio::ip::basic_resolver<asio::ip::tcp>::iterator endpointIterator);
+    void internal_connect(asio::ip::tcp::resolver::results_type::iterator endpointIterator);
     void internal_write();
-    void onResolve(const boost::system::error_code& error, asio::ip::tcp::resolver::iterator endpointIterator);
+    void onResolve(const boost::system::error_code& error, asio::ip::tcp::resolver::results_type results);
     void onConnect(const boost::system::error_code& error);
     void onCanWrite(const boost::system::error_code& error);
     void onWrite(const boost::system::error_code& error, size_t writeSize, std::shared_ptr<asio::streambuf> outputStream);

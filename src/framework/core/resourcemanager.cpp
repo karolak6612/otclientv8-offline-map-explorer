@@ -33,7 +33,7 @@
 #include <regex>
 
 #if !defined(ANDROID)
-#include <boost/process.hpp>
+#include <boost/process/v2/process.hpp>
 #endif
 #include <locale>
 #include <zlib.h>
@@ -128,10 +128,31 @@ bool ResourceManager::launchCorrect(const std::string& product, const std::strin
     if (binary == m_binaryPath)
         return false;
 
-    boost::process::child c(binary.string());
-    std::error_code ec2;
-    if (c.wait_for(std::chrono::seconds(5), ec2)) {
-        return c.exit_code() == 0;
+    boost::asio::io_context ctx;
+    boost::process::v2::process c(ctx, binary.string(), {});
+
+    // emulate blocking wait_for with async_wait + timer
+    boost::system::error_code ec_wait;
+    int exit_code = -1;
+    bool finished = false;
+
+    boost::asio::steady_timer timer(ctx, std::chrono::seconds(5));
+
+    c.async_wait([&](boost::system::error_code ec, int code){
+        ec_wait = ec;
+        exit_code = code;
+        finished = true;
+        timer.cancel();
+    });
+
+    timer.async_wait([&](boost::system::error_code ec){
+        // timeout or cancelled
+    });
+
+    ctx.run();
+
+    if (finished) {
+         return exit_code == 0;
     }
 
     c.detach();
