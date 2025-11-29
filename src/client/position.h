@@ -35,6 +35,7 @@ class Position
 public:
     Position() : x(65535), y(65535), z(255) { }
     Position(uint16 x, uint16 y, uint8 z) : x(x), y(y), z(z) { }
+    Position(const Position& other) : x(other.x), y(other.y), z(other.z) { }
 
     Position translatedToDirection(Otc::Direction direction) {
         Position pos = *this;
@@ -192,7 +193,7 @@ public:
     Position operator+(const Point& other) const { return Position(x + other.x, y + other.y, z); }
     Position& operator+=(const Point& other) { x += other.x; y += other.y; return *this; }
 
-    Position& operator=(const Position& other) { x = other.x; y = other.y; z = other.z; return *this; }
+    Position& operator=(const Position& other) = default;
     bool operator==(const Position& other) const { return other.x == x && other.y == y && other.z == z; }
     bool operator!=(const Position& other) const { return other.x!=x || other.y!=y || other.z!=z; }
     bool isInRange(const Position& pos, int xRange, int yRange, int zRange = 0) const { return std::abs(x-pos.x) <= xRange && std::abs(y-pos.y) <= yRange && std::abs(z - pos.z) <= zRange; }

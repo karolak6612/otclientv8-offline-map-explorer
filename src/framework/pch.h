@@ -23,6 +23,10 @@
 #ifndef PCH_H
 #define PCH_H
 
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+
 // common C headers
 #include <cstdio>
 #include <cstdlib>
@@ -70,7 +74,6 @@
 #include <boost/asio.hpp>
 #include <boost/beast.hpp>
 
-#include <boost/asio/io_service.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #ifndef __EMSCRIPTEN__
 #include <boost/asio/ssl.hpp>

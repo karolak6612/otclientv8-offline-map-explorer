@@ -231,10 +231,11 @@ add_definitions(-D"WITH_ENCRYPTION")
 # main libs
 if(NOT WASM)
     # find boost
+    add_definitions(-DNOMINMAX)
     set(REQUIRED_BOOST_COMPONENTS system filesystem)
     set(Boost_USE_MULTITHREADED ON)
     set(Boost_USE_STATIC_LIBS ${USE_STATIC_LIBS})
-    find_package(Boost 1.67.0 COMPONENTS ${REQUIRED_BOOST_COMPONENTS} REQUIRED)
+    find_package(Boost 1.89.0 COMPONENTS ${REQUIRED_BOOST_COMPONENTS} REQUIRED)
 
     #find zip
     find_package(LibZip REQUIRED)

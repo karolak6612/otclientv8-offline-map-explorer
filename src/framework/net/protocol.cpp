@@ -28,7 +28,7 @@
 #include <framework/net/packet_player.h>
 #include <framework/net/packet_recorder.h>
 
-extern asio::io_service g_ioService;
+extern asio::io_context g_ioContext;
 
 Protocol::Protocol()
 {
@@ -376,7 +376,7 @@ void Protocol::onPlayerPacket(const std::shared_ptr<std::vector<uint8_t>>& packe
     if (m_disconnected)
         return;
     auto self(asProtocol());
-    boost::asio::post(g_ioService, [&, self, packet] {
+    boost::asio::post(g_ioContext, [&, self, packet] {
         if (m_disconnected)
             return;
         m_inputMessage->reset();
@@ -393,7 +393,7 @@ void Protocol::onProxyPacket(const std::shared_ptr<std::vector<uint8_t>>& packet
     if (m_disconnected)
         return;
     auto self(asProtocol());
-    boost::asio::post(g_ioService, [&, self, packet] {
+    boost::asio::post(g_ioContext, [&, self, packet] {
         if (m_disconnected)
             return;
         m_inputMessage->reset();
@@ -416,7 +416,7 @@ void Protocol::onLocalDisconnected(boost::system::error_code ec)
     if (m_disconnected)
         return;
     auto self(asProtocol());
-    boost::asio::post(g_ioService, [&, self, ec] {
+    boost::asio::post(g_ioContext, [&, self, ec] {
         if (m_disconnected)
             return;
         m_disconnected = true;

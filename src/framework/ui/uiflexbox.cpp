@@ -75,7 +75,7 @@ bool UIFlexBox::internalUpdate()
     int spacing = m_spacing;
     if (m_autoSpacing && visibleWidgetCount > 1) {
         int totalSpacing = availableSpace - totalWidgetSize;
-        spacing = std::max(totalSpacing / (visibleWidgetCount - 1), 0);
+        spacing = std::max<int>(totalSpacing / (visibleWidgetCount - 1), 0);
     }
 
     int mainAxisPos = 0, crossAxisPos = 0, lineHeight = 0;
