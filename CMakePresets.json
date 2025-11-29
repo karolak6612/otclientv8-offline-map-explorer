@@ -1,0 +1,26 @@
+{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "windows-release-static",
+      "displayName": "Windows Release Static",
+      "description": "Release build with static libraries",
+      "generator": "Visual Studio 17 2022",
+      "architecture": "x64",
+      "toolchainFile": "${sourceDir}/cmake/toolchain-windows.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "VCPKG_TARGET_TRIPLET": "x64-windows-static",
+        "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded$<$<CONFIG:Debug>:Debug>"
+      },
+      "binaryDir": "${sourceDir}/build/windows-release-static"
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "windows-release-static",
+      "configurePreset": "windows-release-static",
+      "configuration": "Release"
+    }
+  ]
+}

@@ -176,6 +176,23 @@ EnterGameWindow
     margin-right: 50
     @onClick: EnterGame.doLogin()
 
+  HorizontalSeparator
+    anchors.left: parent.left
+    anchors.right: parent.right
+    anchors.top: prev.bottom
+    margin-top: 10
+
+  Button
+    id: offlineMapExplorerButton
+    !text: tr('Offline Map Explorer')
+    anchors.left: parent.left
+    anchors.right: parent.right
+    anchors.top: prev.bottom
+    margin-top: 10
+    margin-left: 50
+    margin-right: 50
+    @onClick: EnterGame.onOfflineMapExplorer()
+
   Label
     id: serverInfoLabel
     font: verdana-11px-rounded

@@ -633,3 +633,23 @@ function EnterGame.onLoginError(err)
     EnterGame.clearAccountFields()
   end
 end
+
+
+function EnterGame.onOfflineMapExplorer()
+  if g_game.isOnline() then
+    local errorBox = displayErrorBox(tr('Offline Map Explorer'), tr('Cannot open map explorer while online.'))
+    return
+  end
+  
+  -- Load map explorer module if not already loaded
+  if not g_modules.getModule('client_mapexplorer') then
+    g_modules.ensureModuleLoaded('client_mapexplorer')
+  end
+  
+  -- Show map explorer dialog
+  if MapExplorer then
+    MapExplorer.show()
+  else
+    displayErrorBox(tr('Error'), tr('Failed to load map explorer module.'))
+  end
+end

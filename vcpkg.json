@@ -20,6 +20,7 @@
         "openssl",
         "openal-soft",
         "luajit",
+        "glew",
         {
             "name": "opengl",
             "platform": "windows | linux"

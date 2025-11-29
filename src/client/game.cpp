@@ -669,10 +669,13 @@ void Game::autoWalk(const std::vector<Otc::Direction>& dirs, Position startPos)
 
     g_lua.callGlobalField("g_game", "onAutoWalk", dirs);
 
-    if (g_game.getFeature(Otc::GameNewWalking))
-        m_protocolGame->sendNewWalk(m_walkId, m_walkPrediction, startPos, flags, dirs);
-    else
-        m_protocolGame->sendAutoWalk(dirs);
+    // Offline mode support: only send protocol messages if connected
+    if (m_protocolGame) {
+        if (g_game.getFeature(Otc::GameNewWalking))
+            m_protocolGame->sendNewWalk(m_walkId, m_walkPrediction, startPos, flags, dirs);
+        else
+            m_protocolGame->sendAutoWalk(dirs);
+    }
 }
 
 void Game::walk(Otc::Direction direction, bool withPreWalk)
@@ -694,38 +697,44 @@ void Game::walk(Otc::Direction direction, bool withPreWalk)
         if (withPreWalk) {
             flags |= 0x01;
         }
-        m_protocolGame->sendNewWalk(m_walkId, m_walkPrediction, pos, flags, { direction });
+        // Offline mode support: only send if protocol exists
+        if (m_protocolGame) {
+            m_protocolGame->sendNewWalk(m_walkId, m_walkPrediction, pos, flags, { direction });
+        }
         m_denyBotCall = true;
         return;
     }
 
-    switch(direction) {
-    case Otc::North:
-        m_protocolGame->sendWalkNorth();
-        break;
-    case Otc::East:
-        m_protocolGame->sendWalkEast();
-        break;
-    case Otc::South:
-        m_protocolGame->sendWalkSouth();
-        break;
-    case Otc::West:
-        m_protocolGame->sendWalkWest();
-        break;
-    case Otc::NorthEast:
-        m_protocolGame->sendWalkNorthEast();
-        break;
-    case Otc::SouthEast:
-        m_protocolGame->sendWalkSouthEast();
-        break;
-    case Otc::SouthWest:
-        m_protocolGame->sendWalkSouthWest();
-        break;
-    case Otc::NorthWest:
-        m_protocolGame->sendWalkNorthWest();
-        break;
-    default:
-        break;
+    // Offline mode support: only send protocol messages if connected
+    if (m_protocolGame) {
+        switch(direction) {
+        case Otc::North:
+            m_protocolGame->sendWalkNorth();
+            break;
+        case Otc::East:
+            m_protocolGame->sendWalkEast();
+            break;
+        case Otc::South:
+            m_protocolGame->sendWalkSouth();
+            break;
+        case Otc::West:
+            m_protocolGame->sendWalkWest();
+            break;
+        case Otc::NorthEast:
+            m_protocolGame->sendWalkNorthEast();
+            break;
+        case Otc::SouthEast:
+            m_protocolGame->sendWalkSouthEast();
+            break;
+        case Otc::SouthWest:
+            m_protocolGame->sendWalkSouthWest();
+            break;
+        case Otc::NorthWest:
+            m_protocolGame->sendWalkNorthWest();
+            break;
+        default:
+            break;
+        }
     }
     m_denyBotCall = true;
 }
@@ -742,21 +751,24 @@ void Game::turn(Otc::Direction direction)
         m_localPlayer->setDirection(direction);
     }
 
-    switch(direction) {
-    case Otc::North:
-        m_protocolGame->sendTurnNorth();
-        break;
-    case Otc::East:
-        m_protocolGame->sendTurnEast();
-        break;
-    case Otc::South:
-        m_protocolGame->sendTurnSouth();
-        break;
-    case Otc::West:
-        m_protocolGame->sendTurnWest();
-        break;
-    default:
-        break;
+    // Offline mode support: only send protocol messages if connected
+    if (m_protocolGame) {
+        switch(direction) {
+        case Otc::North:
+            m_protocolGame->sendTurnNorth();
+            break;
+        case Otc::East:
+            m_protocolGame->sendTurnEast();
+            break;
+        case Otc::South:
+            m_protocolGame->sendTurnSouth();
+            break;
+        case Otc::West:
+            m_protocolGame->sendTurnWest();
+            break;
+        default:
+            break;
+        }
     }
     m_denyBotCall = true;
 }

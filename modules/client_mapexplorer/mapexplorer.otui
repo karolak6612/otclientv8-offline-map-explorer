@@ -1,0 +1,87 @@
+MapExplorerWindow < MainWindow
+  id: mapExplorerWindow
+  !text: tr('Offline Map Explorer')
+  size: 400 250
+  @onEscape: self:destroy()
+
+  Label
+    !text: tr('Client Version:')
+    anchors.left: parent.left
+    anchors.top: parent.top
+    margin-top: 10
+    margin-left: 10
+
+  ComboBox
+    id: versionSelector
+    anchors.left: prev.right
+    anchors.top: prev.top
+    anchors.right: parent.right
+    margin-left: 10
+    margin-right: 10
+    margin-top: -3
+
+  Label
+    !text: tr('Map File:')
+    anchors.left: parent.left
+    anchors.top: prev.bottom
+    margin-top: 15
+    margin-left: 10
+
+  TextEdit
+    id: mapPathEdit
+    anchors.left: prev.right
+    anchors.top: prev.top
+    anchors.right: browseButton.left
+    margin-left: 10
+    margin-right: 5
+    margin-top: -3
+    enabled: false
+
+  Button
+    id: browseButton
+    !text: tr('Browse...')
+    anchors.right: parent.right
+    anchors.top: mapPathEdit.top
+    margin-right: 10
+    width: 80
+    @onClick: MapExplorer.onBrowseMap()
+
+  Label
+    id: statusLabel
+    !text: tr('Select a .otbm file and click Load')
+    anchors.left: parent.left
+    anchors.right: parent.right
+    anchors.top: prev.bottom
+    margin-top: 20
+    margin-left: 10
+    margin-right: 10
+    text-align: center
+    color: #aaaaaa
+
+  HorizontalSeparator
+    anchors.left: parent.left
+    anchors.right: parent.right
+    anchors.bottom: loadButton.top
+    margin-bottom: 10
+    margin-left: 10
+    margin-right: 10
+
+  Button
+    id: loadButton
+    !text: tr('Load Map')
+    anchors.right: parent.right
+    anchors.bottom: parent.bottom
+    margin-right: 10
+    margin-bottom: 10
+    width: 100
+    enabled: false
+    @onClick: MapExplorer.onLoadMap()
+
+  Button
+    id: cancelButton
+    !text: tr('Cancel')
+    anchors.right: prev.left
+    anchors.bottom: prev.bottom
+    margin-right: 10
+    width: 100
+    @onClick: self:getParent():destroy()

@@ -1,0 +1,9 @@
+Module
+  name: client_mapexplorer
+  description: Offline OTBM Map Explorer
+  author: OTClientV8
+  website: https://github.com/edubart/otclient
+  sandboxed: true
+  scripts: [ mapexplorer ]
+  @onLoad: init()
+  @onUnload: terminate()
