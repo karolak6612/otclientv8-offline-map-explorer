@@ -567,10 +567,14 @@ void Map::setCentralPosition(const Position& centralPosition)
 
     m_centralPosition = centralPosition;
 
-    removeUnawareThings();
+    // Fix: Don't remove unaware things in offline mode, as we don't have a server to resend them
+    LocalPlayerPtr localPlayer = g_game.getLocalPlayer();
+    if (!localPlayer || !localPlayer->isOfflineMode()) {
+        removeUnawareThings();
+    }
 
     // Skip force-correction in offline mode - no server desync possible
-    LocalPlayerPtr localPlayer = g_game.getLocalPlayer();
+    // LocalPlayerPtr localPlayer = g_game.getLocalPlayer(); // Already defined above
     if (localPlayer && localPlayer->isOfflineMode()) {
         // In offline mode, trust the player position - no packet loss recovery needed
         g_logger.info(stdext::format("[Offline] setCentralPosition: (%d,%d,%d) - SKIPPING force-correction", 
