@@ -33,7 +33,7 @@
 #include <regex>
 
 #if !defined(ANDROID)
-#include <boost/process.hpp>
+#include <boost/process/v1/child.hpp>
 #endif
 #include <locale>
 #include <zlib.h>
@@ -128,9 +128,8 @@ bool ResourceManager::launchCorrect(const std::string& product, const std::strin
     if (binary == m_binaryPath)
         return false;
 
-    boost::process::child c(binary.string());
-    std::error_code ec2;
-    if (c.wait_for(std::chrono::seconds(5), ec2)) {
+    boost::process::v1::child c(binary.string());
+    if (c.wait_for(std::chrono::seconds(5))) {
         return c.exit_code() == 0;
     }
 
@@ -544,6 +543,15 @@ std::list<std::string> ResourceManager::listDirectoryFiles(const std::string& di
     PHYSFS_freeList(rc);
     files.sort();
     return files;
+}
+
+std::string ResourceManager::getFileModificationTime(const std::string& fileName)
+{
+    std::string fullPath = resolvePath(fileName);
+    PHYSFS_sint64 modtime = PHYSFS_getLastModTime(fullPath.c_str());
+    if (modtime == -1)
+        return "0";
+    return std::to_string(modtime);
 }
 
 std::string ResourceManager::resolvePath(std::string path)

@@ -15,6 +15,8 @@ function init()
       tr('Minimap') .. ' (Ctrl+M)', '/images/topbuttons/minimap', toggle)
     minimapButton:setOn(true)
   end
+  
+  connect(g_game, { onGameStart = onGameStart })
 
   minimapWidget = minimapWindow:recursiveGetChildById('minimap')
 
@@ -177,6 +179,12 @@ function offline()
 end
 
 function loadMap()
+  -- Skip loading from file if we are in Map Explorer mode (we generate from map instead)
+  if MapExplorer then 
+    g_logger.info("minimap.lua: MapExplorer active, skipping loadMap (using generated map)")
+    return 
+  end
+
   local clientVersion = g_game.getClientVersion()
 
   g_minimap.clean()
@@ -205,6 +213,23 @@ function saveMap()
   local minimapFile = '/minimap' .. clientVersion .. '.otmm' 
   g_minimap.saveOtmm(minimapFile)
   minimapWidget:save()
+end
+
+function onGameStart()
+  g_logger.info("minimap.lua: onGameStart called")
+  local player = g_game.getLocalPlayer()
+  if player then
+    -- Force generation in offline mode OR if MapExplorer is active
+    if not g_game.isOnline() or MapExplorer then
+      g_logger.info("minimap.lua: Generating minimap from map (offline/explorer)")
+      g_minimap.generateFromMap()
+      g_logger.info("minimap.lua: Minimap generation triggered")
+    end
+    updateCameraPosition()
+    connect(player, { onPositionChange = updateCameraPosition })
+  else
+    g_logger.error("minimap.lua: No local player found in onGameStart")
+  end
 end
 
 function updateCameraPosition()
@@ -255,10 +280,48 @@ function floorUp()
   minimapWidget:floorUp(1)
 end
 
+function terminate()
+  disconnect(g_game, { onGameStart = onGameStart })
+  
+  if minimapButton then
+    minimapButton:destroy()
+  end
+  
+  if minimapWindow then
+    minimapWindow:destroy()
+  end
+end
+
 function zoomIn()
   minimapWidget:zoomIn()
 end
 
 function zoomOut()
   minimapWidget:zoomOut()
+end
+
+function onLeftResizeBorderMove(self, mousePos, mouseMoved)
+  if self:isPressed() then
+    local parent = self:getParent()
+    local delta = mouseMoved.x
+    local newWidth = parent:getWidth() - delta
+    if newWidth >= 50 then
+      parent:setWidth(newWidth)
+      parent:setX(parent:getX() + delta)
+    end
+    return true
+  end
+end
+
+function onTopResizeBorderMove(self, mousePos, mouseMoved)
+  if self:isPressed() then
+    local parent = self:getParent()
+    local delta = mouseMoved.y
+    local newHeight = parent:getHeight() - delta
+    if newHeight >= 50 then
+      parent:setHeight(newHeight)
+      parent:setY(parent:getY() + delta)
+    end
+    return true
+  end
 end

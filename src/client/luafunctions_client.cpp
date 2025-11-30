@@ -152,6 +152,7 @@ void Client::registerLuaFunctions()
     g_lua.bindSingletonFunction("g_map", "setWidth", &Map::setWidth, &g_map);
     g_lua.bindSingletonFunction("g_map", "setHeight", &Map::setHeight, &g_map);
     g_lua.bindSingletonFunction("g_map", "getSize", &Map::getSize, &g_map);
+    g_lua.bindSingletonFunction("g_map", "isPositionWithinMapBounds", [](const Position& pos) { return g_map.isPositionWithinMapBounds(pos); });
     g_lua.bindSingletonFunction("g_map", "setDescription", &Map::setDescription, &g_map);
     g_lua.bindSingletonFunction("g_map", "getDescriptions", &Map::getDescriptions, &g_map);
     g_lua.bindSingletonFunction("g_map", "clearDescriptions", &Map::clearDescriptions, &g_map);
@@ -178,6 +179,7 @@ void Client::registerLuaFunctions()
     g_lua.bindSingletonFunction("g_map", "saveImage", &Map::saveImage, &g_map);
     g_lua.bindSingletonFunction("g_map", "getLowerFloorsShadowPercent", &Map::getLowerFloorsShadowPercent, &g_map);
     g_lua.bindSingletonFunction("g_map", "setLowerFloorsShadowPercent", &Map::setLowerFloorsShadowPercent, &g_map);
+    g_lua.bindSingletonFunction("g_map", "setLight", &Map::setLight, &g_map);
 
     g_lua.registerSingletonClass("g_minimap");
     g_lua.bindSingletonFunction("g_minimap", "clean", &Minimap::clean, &g_minimap);
@@ -207,6 +209,9 @@ void Client::registerLuaFunctions()
 
     g_lua.registerSingletonClass("g_game");
     g_lua.bindSingletonFunction("g_game", "loginWorld", &Game::loginWorld, &g_game);
+    g_lua.bindSingletonFunction("g_game", "processGameStart", &Game::processGameStart, &g_game);
+    g_lua.bindSingletonFunction("g_game", "setOnline", &Game::setOnline, &g_game);
+    g_lua.bindSingletonFunction("g_game", "setLocalPlayer", &Game::setLocalPlayer, &g_game);
     g_lua.bindSingletonFunction("g_game", "playRecord", &Game::playRecord, &g_game);
     g_lua.bindSingletonFunction("g_game", "cancelLogin", &Game::cancelLogin, &g_game);
     g_lua.bindSingletonFunction("g_game", "forceLogout", &Game::forceLogout, &g_game);
@@ -537,6 +542,8 @@ void Client::registerLuaFunctions()
     g_lua.bindClassMemberFunction<Creature>("setEmblemTexture", &Creature::setEmblemTexture);
     g_lua.bindClassMemberFunction<Creature>("setTypeTexture", &Creature::setTypeTexture);
     g_lua.bindClassMemberFunction<Creature>("setIconTexture", &Creature::setIconTexture);
+    g_lua.bindClassMemberFunction<Creature>("setPassable", &Creature::setPassable);
+    g_lua.bindClassMemberFunction<Creature>("allowAppearWalk", &Creature::allowAppearWalk);
     g_lua.bindClassMemberFunction<Creature>("showStaticSquare", &Creature::showStaticSquare);
     g_lua.bindClassMemberFunction<Creature>("hideStaticSquare", &Creature::hideStaticSquare);
     g_lua.bindClassMemberFunction<Creature>("isWalking", &Creature::isWalking);
@@ -561,6 +568,7 @@ void Client::registerLuaFunctions()
     g_lua.bindClassMemberFunction<Creature>("getTimedSquareColor", &Creature::getTimedSquareColor);
     g_lua.bindClassMemberFunction<Creature>("isStaticSquareVisible", &Creature::isStaticSquareVisible);
     g_lua.bindClassMemberFunction<Creature>("getStaticSquareColor", &Creature::getStaticSquareColor);
+    g_lua.bindClassMemberFunction<Creature>("walk", &Creature::walk);
 
     // widgets
     g_lua.bindClassMemberFunction<Creature>("addTopWidget", &Creature::addTopWidget);
@@ -730,6 +738,7 @@ void Client::registerLuaFunctions()
     g_lua.registerClass<Monster, Creature>();
 
     g_lua.registerClass<LocalPlayer, Player>();
+    g_lua.bindClassStaticFunction<LocalPlayer>("create", []{ return std::make_shared<LocalPlayer>(); });
     g_lua.bindClassMemberFunction<LocalPlayer>("unlockWalk", &LocalPlayer::unlockWalk);
     g_lua.bindClassMemberFunction<LocalPlayer>("lockWalk", &LocalPlayer::lockWalk);
     g_lua.bindClassMemberFunction<LocalPlayer>("isWalkLocked", &LocalPlayer::isWalkLocked);
@@ -748,6 +757,12 @@ void Client::registerLuaFunctions()
     g_lua.bindClassMemberFunction<LocalPlayer>("setStamina", &LocalPlayer::setStamina);
     g_lua.bindClassMemberFunction<LocalPlayer>("setKnown", &LocalPlayer::setKnown);
     g_lua.bindClassMemberFunction<LocalPlayer>("setInventoryItem", &LocalPlayer::setInventoryItem);
+    g_lua.bindClassMemberFunction<LocalPlayer>("setStates", &LocalPlayer::setStates);
+    g_lua.bindClassMemberFunction<LocalPlayer>("setSkill", &LocalPlayer::setSkill);
+    g_lua.bindClassMemberFunction<LocalPlayer>("setBaseSkill", &LocalPlayer::setBaseSkill);
+    g_lua.bindClassMemberFunction<LocalPlayer>("setHealth", &LocalPlayer::setHealth);
+    g_lua.bindClassMemberFunction<LocalPlayer>("setTotalCapacity", &LocalPlayer::setTotalCapacity);
+    g_lua.bindClassMemberFunction<LocalPlayer>("setFreeCapacity", &LocalPlayer::setFreeCapacity);
     g_lua.bindClassMemberFunction<LocalPlayer>("getStates", &LocalPlayer::getStates);
     g_lua.bindClassMemberFunction<LocalPlayer>("getSkillLevel", &LocalPlayer::getSkillLevel);
     g_lua.bindClassMemberFunction<LocalPlayer>("getSkillBaseLevel", &LocalPlayer::getSkillBaseLevel);
@@ -783,6 +798,19 @@ void Client::registerLuaFunctions()
     g_lua.bindClassMemberFunction<LocalPlayer>("dumpWalkMatrix", &LocalPlayer::dumpWalkMatrix);
     g_lua.bindClassMemberFunction<LocalPlayer>("startServerWalking", &LocalPlayer::startServerWalking);
     g_lua.bindClassMemberFunction<LocalPlayer>("finishServerWalking", &LocalPlayer::finishServerWalking);
+    g_lua.bindClassMemberFunction<LocalPlayer>("unlockWalk", &LocalPlayer::unlockWalk);
+    g_lua.bindClassMemberFunction<LocalPlayer>("lockWalk", &LocalPlayer::lockWalk);
+    g_lua.bindClassMemberFunction<LocalPlayer>("isWalkLocked", &LocalPlayer::isWalkLocked);
+    g_lua.bindClassMemberFunction<LocalPlayer>("canWalk", &LocalPlayer::canWalk);
+    g_lua.bindClassMemberFunction<LocalPlayer>("getWalkPrediction", &LocalPlayer::getWalkPrediction);
+    g_lua.bindClassMemberFunction<LocalPlayer>("getSpells", &LocalPlayer::getSpells);
+
+    // Offline mode support for map explorer
+    g_lua.bindClassMemberFunction<LocalPlayer>("setOfflineMode", &LocalPlayer::setOfflineMode);
+    g_lua.bindClassMemberFunction<LocalPlayer>("isOfflineMode", &LocalPlayer::isOfflineMode);
+    g_lua.bindClassMemberFunction<LocalPlayer>("setNoClipMode", &LocalPlayer::setNoClipMode);
+    g_lua.bindClassMemberFunction<LocalPlayer>("isNoClipEnabled", &LocalPlayer::isNoClipEnabled);
+    g_lua.bindClassMemberFunction<LocalPlayer>("setPositionInstant", &LocalPlayer::setPositionInstant);
 
     g_lua.registerClass<Tile>();
     g_lua.bindClassMemberFunction<Tile>("clean", &Tile::clean);
@@ -904,6 +932,7 @@ void Client::registerLuaFunctions()
     g_lua.bindClassMemberFunction<UIMap>("lockVisibleFloor", &UIMap::lockVisibleFloor);
     g_lua.bindClassMemberFunction<UIMap>("unlockVisibleFloor", &UIMap::unlockVisibleFloor);
     g_lua.bindClassMemberFunction<UIMap>("setVisibleDimension", &UIMap::setVisibleDimension);
+    g_lua.bindClassMemberFunction<UIMap>("setDrawBuffer", &UIMap::setDrawBuffer);
     g_lua.bindClassMemberFunction<UIMap>("setDrawFlags", &UIMap::setDrawFlags);
     g_lua.bindClassMemberFunction<UIMap>("setDrawTexts", &UIMap::setDrawTexts);
     g_lua.bindClassMemberFunction<UIMap>("setDrawNames", &UIMap::setDrawNames);
@@ -963,6 +992,8 @@ void Client::registerLuaFunctions()
     g_lua.bindClassMemberFunction<UIMinimap>("anchorPosition", &UIMinimap::anchorPosition);
     g_lua.bindClassMemberFunction<UIMinimap>("fillPosition", &UIMinimap::fillPosition);
     g_lua.bindClassMemberFunction<UIMinimap>("centerInPosition", &UIMinimap::centerInPosition);
+
+    g_lua.bindSingletonFunction("g_minimap", "generateFromMap", &Minimap::generateFromMap, &g_minimap);
 
     g_lua.registerClass<UIProgressRect, UIWidget>();
     g_lua.bindClassStaticFunction<UIProgressRect>("create", [] { return std::make_shared<UIProgressRect>(); });

@@ -174,7 +174,8 @@ local PreviewOptions = {
   ["showBars"] = onShowBarsChange
 }
 
-function create(currentOutfit, outfitList, mountList, wingList, auraList, shaderList, healthBarList, manaBarList)
+function create(currentOutfit, outfitList, mountList, wingList, auraList, shaderList, healthBarList, manaBarList, onAcceptCallback)
+  g_logger.info("outfit.lua: create called")
   if ignoreNextOutfitWindow and g_clock.millis() < ignoreNextOutfitWindow + 1000 then
     return
   end
@@ -197,7 +198,8 @@ function create(currentOutfit, outfitList, mountList, wingList, auraList, shader
     auras = auraList,
     shaders = shaderList,
     healthBars = healthBarList,
-    manaBars = manaBarList
+    manaBars = manaBarList,
+    onAcceptCallback = onAcceptCallback
   }
 
   window = g_ui.displayUI("outfitwindow")
@@ -1089,6 +1091,7 @@ function onColorCheckChange(widget, selectedWidget)
 end
 
 function updatePreview()
+  g_logger.info("outfit.lua: updatePreview called")
   local direction = previewCreature:getDirection()
   local previewOutfit = table.copy(tempOutfit)
 
@@ -1183,7 +1186,9 @@ function updatePreview()
     window.preview.panel.bars:show()
   end
 
+  g_logger.info("outfit.lua: About to call previewCreature:setOutfit")
   previewCreature:setOutfit(previewOutfit)
+  g_logger.info("outfit.lua: previewCreature:setOutfit completed")
   previewCreature:setDirection(direction)
 end
 
@@ -1262,49 +1267,47 @@ function saveSettings()
 end
 
 function loadSettings()
-  if not g_resources.fileExists(settingsFile) then
-    g_resources.makeDir("/settings")
+  local filename = "outfit.json"
+  if _G.ExplorerConfig and _G.ExplorerConfig.OUTFIT_FILE then
+    filename = _G.ExplorerConfig.OUTFIT_FILE
   end
 
-  if g_resources.fileExists(settingsFile) then
-    local json_status, json_data =
-      pcall(
-      function()
-        return json.decode(g_resources.readFileContents(settingsFile))
-      end
-    )
-
-    if not json_status then
-      g_logger.error("[loadSettings] Couldn't load JSON: " .. json_data)
-      return
+  local f = io.open(filename, "r")
+  if f then
+    local content = f:read("*a")
+    f:close()
+    local status, result = pcall(function() return json.decode(content) end)
+    if status then
+      settings = result
+    else
+      g_logger.error("Failed to parse " .. filename .. ": " .. tostring(result))
     end
-
-    settings = json_data[g_game.getCharacterName()]
-    if not settings then
-      loadDefaultSettings()
-    end
-  else
-    loadDefaultSettings()
   end
+
+  -- Default values from ExplorerConfig
+  local Config = _G.ExplorerConfig or {}
+  
+  settings = settings or {} -- Ensure settings table exists
+  settings.presets = settings.presets or {}
+  settings.currentPreset = settings.currentPreset or 0
+  
+  -- Use Config defaults if available, otherwise fallback to true
+  if settings.showFloor == nil then settings.showFloor = Config.DEFAULT_SHOW_FLOOR ~= false end
+  if settings.showOutfit == nil then settings.showOutfit = Config.DEFAULT_SHOW_OUTFIT ~= false end
+  if settings.showMount == nil then settings.showMount = Config.DEFAULT_SHOW_MOUNT ~= false end
+  if settings.showWings == nil then settings.showWings = Config.DEFAULT_SHOW_WINGS ~= false end
+  if settings.showAura == nil then settings.showAura = Config.DEFAULT_SHOW_AURA ~= false end
+  if settings.showShader == nil then settings.showShader = Config.DEFAULT_SHOW_SHADER ~= false end
+  if settings.showBars == nil then settings.showBars = Config.DEFAULT_SHOW_BARS ~= false end
+  if settings.movement == nil then settings.movement = Config.DEFAULT_MOVEMENT_ENABLED ~= false end
 end
 
-function loadDefaultSettings()
-  settings = {
-    movement = false,
-    showFloor = false,
-    showOutfit = true,
-    showMount = false,
-    showWings = false,
-    showAura = false,
-    showShader = false,
-    showBars = false,
-    presets = {},
-    currentPreset = 0
-  }
-  settings.currentPreset = 0
+function saveSettings()
+  -- Read-only: Client does not write to outfit.json
 end
 
 function accept()
+  g_logger.info("outfit.lua: accept() called")
   if g_game.getFeature(GamePlayerMounts) then
     local player = g_game.getLocalPlayer()
     local isMountedChecked = window.configure.mount.check:isChecked()
@@ -1318,6 +1321,46 @@ function accept()
     end
   end
 
-  g_game.changeOutfit(tempOutfit)
+  if ServerData.onAcceptCallback then
+    g_logger.info("outfit.lua: Executing onAcceptCallback")
+    ServerData.onAcceptCallback(tempOutfit)
+    destroy()
+    return
+  end
+
+  if g_game.isOnline() then
+    g_logger.info("outfit.lua: Online mode, calling g_game.changeOutfit")
+    g_game.changeOutfit(tempOutfit)
+  else
+    g_logger.info("outfit.lua: Offline mode")
+    local player = g_game.getLocalPlayer()
+    if player then
+      -- Ensure outfit has all required fields to prevent C++ crashes
+      local safeOutfit = table.copy(tempOutfit)
+      safeOutfit.type = safeOutfit.type or 0
+      safeOutfit.head = safeOutfit.head or 0
+      safeOutfit.body = safeOutfit.body or 0
+      safeOutfit.legs = safeOutfit.legs or 0
+      safeOutfit.feet = safeOutfit.feet or 0
+      safeOutfit.addons = safeOutfit.addons or 0
+      safeOutfit.mount = safeOutfit.mount or 0
+      
+      g_logger.info(string.format("Offline: Setting outfit type=%d", safeOutfit.type))
+      local status, err = pcall(function() 
+        g_logger.info("outfit.lua: Calling player:setOutfit inside pcall")
+        player:setOutfit(safeOutfit) 
+        g_logger.info("outfit.lua: player:setOutfit returned")
+      end)
+      if not status then
+        g_logger.error("Failed to set outfit offline: " .. err)
+      else
+        g_logger.info("outfit.lua: setOutfit successful")
+      end
+    else
+      g_logger.error("outfit.lua: No local player found!")
+    end
+  end
+  g_logger.info("outfit.lua: Destroying window")
   destroy()
+  g_logger.info("outfit.lua: Window destroyed")
 end

@@ -52,6 +52,7 @@ MapView::MapView()
     m_cachedFirstVisibleFloor = 7;
     m_cachedLastVisibleFloor = 7;
     m_minimumAmbientLight = 0;
+    m_drawBuffer = Size(3, 3);
     m_optimizedSize = Size(g_map.getAwareRange().horizontal(), g_map.getAwareRange().vertical()) * g_sprites.spriteSize();
 
     setVisibleDimension(Size(15, 11));
@@ -187,6 +188,35 @@ void MapView::drawFloor(short floor, const Position& cameraPosition, const TileP
 
     // light
     if (m_lightView) {
+        // Extended light range to fix pop-in
+        const int lightRange = 15;
+        int halfWidth = m_drawDimension.width() / 2;
+        int halfHeight = m_drawDimension.height() / 2;
+        
+        for (int x = -halfWidth - lightRange; x <= halfWidth + lightRange; ++x) {
+            for (int y = -halfHeight - lightRange; y <= halfHeight + lightRange; ++y) {
+                if (x >= -halfWidth && x <= halfWidth && y >= -halfHeight && y <= halfHeight)
+                    continue;
+
+                Position pos = cameraPosition.translated(x, y);
+                if (!pos.isValid()) continue;
+
+                TilePtr tile = g_map.getTile(pos);
+                if (!tile) continue;
+
+                Point tileDrawPos = transformPositionTo2D(pos, cameraPosition);
+
+                for (const ThingPtr& thing : tile->getThings()) {
+                    if (thing->isCreature() && thing->static_self_cast<Creature>()->isWalking()) continue;
+                    
+                    Light light = thing->getLight();
+                    if (light.intensity > 0) {
+                        m_lightView->addLight(tileDrawPos + thing->getDisplacement() + light.pos, light.color, light.intensity);
+                    }
+                }
+            }
+        }
+
         for (auto& tile : tiles) {
             Point tileDrawPos = transformPositionTo2D(tile->getPosition(), cameraPosition);
             ItemPtr ground = tile->getGround();
@@ -421,7 +451,7 @@ void MapView::updateGeometry(const Size& visibleDimension, const Size& optimized
 {
     m_multifloor = true;
     m_visibleDimension = visibleDimension;
-    m_drawDimension = visibleDimension + Size(3, 3);
+    m_drawDimension = visibleDimension + m_drawBuffer;
     m_virtualCenterOffset = (m_drawDimension / 2 - Size(1, 1)).toPoint();
     m_visibleCenterOffset = m_virtualCenterOffset;
     m_optimizedSize = m_drawDimension * g_sprites.spriteSize();
@@ -466,6 +496,12 @@ void MapView::setVisibleDimension(const Size& visibleDimension)
     }
 
     updateGeometry(visibleDimension, m_optimizedSize);
+}
+
+void MapView::setDrawBuffer(const Size& drawBuffer)
+{
+    m_drawBuffer = drawBuffer;
+    updateGeometry(m_visibleDimension, m_optimizedSize);
 }
 
 void MapView::optimizeForSize(const Size& visibleSize)

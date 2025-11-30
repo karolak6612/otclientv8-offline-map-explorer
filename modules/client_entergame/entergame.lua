@@ -296,6 +296,7 @@ end
 
 -- public functions
 function EnterGame.init()
+  print("EnterGame module initializing...")
   if USE_NEW_ENERGAME then return end
   enterGame = g_ui.displayUI('entergame')
   if LOGPASS ~= nil then
@@ -392,7 +393,6 @@ function EnterGame.show()
   enterGame:show()
   enterGame:raise()
   enterGame:focus()
-  enterGame:getChildById('accountNameTextEdit'):focus()
   if logpass then
     logpass:show()
     logpass:raise()
@@ -423,7 +423,7 @@ function EnterGame.clearAccountFields()
   enterGame:getChildById('accountNameTextEdit'):clearText()
   enterGame:getChildById('accountPasswordTextEdit'):clearText()
   enterGame:getChildById('accountTokenTextEdit'):clearText()
-  enterGame:getChildById('accountNameTextEdit'):focus()
+  enterGame:getChildById('accountTokenTextEdit'):clearText()
   g_settings.remove('account')
   g_settings.remove('password')
 end
@@ -631,5 +631,36 @@ function EnterGame.onLoginError(err)
   errorBox.onOk = EnterGame.show
   if err:lower():find("invalid") or err:lower():find("not correct") or err:lower():find("or password") then
     EnterGame.clearAccountFields()
+  end
+end
+
+
+function EnterGame.onOfflineMapExplorer()
+  g_logger.info("EnterGame: Offline Map Explorer button clicked")
+  if g_game.isOnline() then
+    local errorBox = displayErrorBox(tr('Offline Map Explorer'), tr('Cannot open map explorer while online.'))
+    return
+  end
+  
+  -- Load map explorer module
+  g_modules.ensureModuleLoaded('client_mapexplorer')
+  
+  local module = g_modules.getModule('client_mapexplorer')
+  if not module or not module:isLoaded() then
+    g_logger.error("EnterGame: Failed to load client_mapexplorer module")
+    displayErrorBox(tr('Error'), tr('Failed to load map explorer module.'))
+    return
+  end
+  
+  g_logger.info("EnterGame: client_mapexplorer module loaded")
+  
+  -- Show map explorer dialog
+  if MapExplorer then
+    g_logger.info("EnterGame: MapExplorer global found, showing window")
+    local version = tonumber(clientVersionSelector:getText())
+    MapExplorer.show(version)
+  else
+    g_logger.error("EnterGame: MapExplorer global NOT found after module load!")
+    displayErrorBox(tr('Error'), tr('Failed to load map explorer module.'))
   end
 end

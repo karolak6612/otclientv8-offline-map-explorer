@@ -192,7 +192,8 @@ void Game::processGameStart()
     m_online = true;
 
     // synchronize fight modes with the server
-    m_protocolGame->sendChangeFightModes(m_fightMode, m_chaseMode, m_safeFight, m_pvpMode);
+    if(m_protocolGame)
+        m_protocolGame->sendChangeFightModes(m_fightMode, m_chaseMode, m_safeFight, m_pvpMode);
 
     // NOTE: the entire map description and local player information is not known yet (bot call is allowed here)
     enableBotCall();
@@ -619,7 +620,8 @@ void Game::forceLogout()
         return;
 
     g_lua.callGlobalField("g_game", "onLogout");
-    m_protocolGame->sendLogout();
+    if(m_protocolGame)
+        m_protocolGame->sendLogout();
     processDisconnect();
 }
 
@@ -629,13 +631,26 @@ void Game::safeLogout()
         return;
 
     g_lua.callGlobalField("g_game", "onLogout");
-    m_protocolGame->sendLogout();
+    if(m_protocolGame)
+        m_protocolGame->sendLogout();
 }
 
 void Game::autoWalk(const std::vector<Otc::Direction>& dirs, Position startPos)
 {
     if(!canPerformGameAction())
         return;
+
+    // ADD OFFLINE MODE CHECK
+    if(!isOnline()) {
+        g_logger.debug("Offline mode: Skipping server autoWalk packet");
+        // Directly execute the walk locally
+        if(m_localPlayer) {
+            m_localPlayer->stopAutoWalk();
+            // Skip the server packet send - don't need to set destination in offline mode
+            return;
+        }
+        return;
+    }
 
     if (dirs.size() == 0)
         return;
@@ -669,19 +684,50 @@ void Game::autoWalk(const std::vector<Otc::Direction>& dirs, Position startPos)
 
     g_lua.callGlobalField("g_game", "onAutoWalk", dirs);
 
-    if (g_game.getFeature(Otc::GameNewWalking))
-        m_protocolGame->sendNewWalk(m_walkId, m_walkPrediction, startPos, flags, dirs);
-    else
-        m_protocolGame->sendAutoWalk(dirs);
+    // Offline mode support: only send protocol messages if connected
+    if (m_protocolGame) {
+        if (g_game.getFeature(Otc::GameNewWalking))
+            m_protocolGame->sendNewWalk(m_walkId, m_walkPrediction, startPos, flags, dirs);
+        else
+            m_protocolGame->sendAutoWalk(dirs);
+    }
 }
 
 void Game::walk(Otc::Direction direction, bool withPreWalk)
 {
+    // CRITICAL: Re-entrancy protection
+    // walk() can be called from multiple sources simultaneously:
+    // 1. KeyDown handler (immediate)
+    // 2. KeyPress handler via smartWalk() (20ms delay)
+    // 3. Bot system
+    // 4. Lua callbacks from onWalk
+    // This creates exponential scheduled events → infinite loop
+    static bool isInWalk = false;
+    if (isInWalk) {
+        g_logger.warning(stdext::format("[Walk] RE-ENTRANCY BLOCKED: dir=%d preWalk=%s", 
+            (int)direction, withPreWalk ? "true" : "false"));
+        m_denyBotCall = true;
+        return;
+    }
+    
+    // RAII guard to reset flag on exit
+    struct WalkGuard {
+        ~WalkGuard() { isInWalk = false; }
+    } guard;
+    isInWalk = true;
+    
     m_denyBotCall = false;
     if (!canPerformGameAction()) {
         m_denyBotCall = true;
         return;
     }
+    
+    g_logger.info(stdext::format("[Walk] ENTRY: GameNewWalking=%s, withPreWalk=%s, protocolGame=%s, direction=%d",
+        g_game.getFeature(Otc::GameNewWalking) ? "true" : "false",
+        withPreWalk ? "true" : "false",
+        m_protocolGame ? "exists" : "null",
+        (int)direction));
+    
     if (g_extras.debugWalking) {
         g_logger.info(stdext::format("[%i] Game::walk", (int)g_clock.millis()));
     }
@@ -689,43 +735,85 @@ void Game::walk(Otc::Direction direction, bool withPreWalk)
     g_lua.callGlobalField("g_game", "onWalk", direction, withPreWalk);
 
     if (g_game.getFeature(Otc::GameNewWalking)) {
+        g_logger.info("[Walk] Using NEW walking system");
         Position pos = m_localPlayer->getPrewalkingPosition();
         uint8_t flags = 0;
         if (withPreWalk) {
             flags |= 0x01;
         }
-        m_protocolGame->sendNewWalk(m_walkId, m_walkPrediction, pos, flags, { direction });
+        // Offline mode support: only send if protocol exists
+        if (m_protocolGame) {
+            m_protocolGame->sendNewWalk(m_walkId, m_walkPrediction, pos, flags, { direction });
+        } else {
+            // Offline mode: Only update central position for camera, don't re-execute walk
+            // The prewalk already moved the player visually
+            if (withPreWalk && m_localPlayer) {
+                Position currentPos = m_localPlayer->getPosition();
+                Position newPos = currentPos.translatedToDirection(direction);
+                
+                g_logger.info(stdext::format("[Offline-New] Walk called: currentPos=(%d,%d,%d) newPos=(%d,%d,%d)", 
+                    currentPos.x, currentPos.y, currentPos.z, newPos.x, newPos.y, newPos.z));
+                
+                // Schedule central position update to keep camera following
+                g_dispatcher.scheduleEvent([this, newPos] {
+                    if (m_localPlayer && (m_online || m_localPlayer->isOfflineMode())) {
+                        g_map.setCentralPosition(newPos);
+                        g_logger.info(stdext::format("[Offline-New] Central position updated: (%d,%d,%d)", 
+                            newPos.x, newPos.y, newPos.z));
+                    }
+                }, m_localPlayer->getStepDuration() / 2);
+            }
+        }
         m_denyBotCall = true;
         return;
     }
+    
+    g_logger.info("[Walk] Using OLD walking system");
 
-    switch(direction) {
-    case Otc::North:
-        m_protocolGame->sendWalkNorth();
-        break;
-    case Otc::East:
-        m_protocolGame->sendWalkEast();
-        break;
-    case Otc::South:
-        m_protocolGame->sendWalkSouth();
-        break;
-    case Otc::West:
-        m_protocolGame->sendWalkWest();
-        break;
-    case Otc::NorthEast:
-        m_protocolGame->sendWalkNorthEast();
-        break;
-    case Otc::SouthEast:
-        m_protocolGame->sendWalkSouthEast();
-        break;
-    case Otc::SouthWest:
-        m_protocolGame->sendWalkSouthWest();
-        break;
-    case Otc::NorthWest:
-        m_protocolGame->sendWalkNorthWest();
-        break;
-    default:
-        break;
+    // Offline mode support: only send protocol messages if connected
+    if (m_protocolGame) {
+        switch(direction) {
+        case Otc::North:
+            m_protocolGame->sendWalkNorth();
+            break;
+        case Otc::East:
+            m_protocolGame->sendWalkEast();
+            break;
+        case Otc::South:
+            m_protocolGame->sendWalkSouth();
+            break;
+        case Otc::West:
+            m_protocolGame->sendWalkWest();
+            break;
+        case Otc::NorthEast:
+            m_protocolGame->sendWalkNorthEast();
+            break;
+        case Otc::SouthEast:
+            m_protocolGame->sendWalkSouthEast();
+            break;
+        case Otc::SouthWest:
+            m_protocolGame->sendWalkSouthWest();
+            break;
+        case Otc::NorthWest:
+            m_protocolGame->sendWalkNorthWest();
+            break;
+        default:
+            break;
+        }
+    } else {
+        // Offline mode: Only update central position for camera
+        // DON'T re-execute walk() - the prewalk already moved the player
+        if (withPreWalk && m_localPlayer) {
+            Position oldPos = m_localPlayer->getPosition();
+            Position newPos = oldPos.translatedToDirection(direction);
+            g_dispatcher.scheduleEvent([this, newPos] {
+                if (m_localPlayer && (m_online || m_localPlayer->isOfflineMode())) {
+                    g_map.setCentralPosition(newPos);
+                    g_logger.info(stdext::format("[Offline-Old] Central position updated: (%d,%d,%d)",
+                        newPos.x, newPos.y, newPos.z));
+                }
+            }, m_localPlayer->getStepDuration() / 2);
+        }
     }
     m_denyBotCall = true;
 }
@@ -742,21 +830,24 @@ void Game::turn(Otc::Direction direction)
         m_localPlayer->setDirection(direction);
     }
 
-    switch(direction) {
-    case Otc::North:
-        m_protocolGame->sendTurnNorth();
-        break;
-    case Otc::East:
-        m_protocolGame->sendTurnEast();
-        break;
-    case Otc::South:
-        m_protocolGame->sendTurnSouth();
-        break;
-    case Otc::West:
-        m_protocolGame->sendTurnWest();
-        break;
-    default:
-        break;
+    // Offline mode support: only send protocol messages if connected
+    if (m_protocolGame) {
+        switch(direction) {
+        case Otc::North:
+            m_protocolGame->sendTurnNorth();
+            break;
+        case Otc::East:
+            m_protocolGame->sendTurnEast();
+            break;
+        case Otc::South:
+            m_protocolGame->sendTurnSouth();
+            break;
+        case Otc::West:
+            m_protocolGame->sendTurnWest();
+            break;
+        default:
+            break;
+        }
     }
     m_denyBotCall = true;
 }
@@ -1580,10 +1671,16 @@ bool Game::canPerformGameAction()
     // - the game is online
     // - the local player exists
     // - the local player is not dead
-    // - we have a game protocol
-    // - the game protocol is connected
+    // - we have a game protocol (OR we're in offline/local mode)
+    // - the game protocol is connected (OR we're in offline/local mode)
     // - its not a bot action
-    return m_online && m_localPlayer && !m_localPlayer->isDead() && !m_dead && m_protocolGame && m_protocolGame->isConnected() && checkBotProtection();
+    
+    // Offline/Local mode: Allow actions if online but no protocol (Map Explorer)
+    bool hasValidProtocol = (m_protocolGame && m_protocolGame->isConnected());
+    bool isOfflineMode = (m_online && !m_protocolGame); // Online but no protocol = offline mode
+    
+    return m_online && m_localPlayer && !m_localPlayer->isDead() && !m_dead && 
+           (hasValidProtocol || isOfflineMode) && checkBotProtection();
 }
 
 void Game::setProtocolVersion(int version)

@@ -4,7 +4,7 @@
 # FRAMEWORK_NET
 # FRAMEWORK_XML
 
-# CMAKE_CURRENT_LIST_DIR cmake 2.6 compatibility
+# CMAKE_CURRENT_LIST_DIR cmake 3.5 compatibility
 if(${CMAKE_MAJOR_VERSION} EQUAL 2 AND ${CMAKE_MINOR_VERSION} EQUAL 6)
     get_filename_component(CMAKE_CURRENT_LIST_DIR ${CMAKE_CURRENT_LIST_FILE} PATH)
 endif(${CMAKE_MAJOR_VERSION} EQUAL 2 AND ${CMAKE_MINOR_VERSION} EQUAL 6)
@@ -145,8 +145,10 @@ set(framework_SOURCES ${framework_SOURCES}
     ${CMAKE_CURRENT_LIST_DIR}/platform/platform.h
 )
 
-set_source_files_properties(${CMAKE_CURRENT_LIST_DIR}/luafunctions.cpp
-                            PROPERTIES LANGUAGE CXX COMPILE_FLAGS "-g0 -Os")
+if(NOT MSVC)
+    set_source_files_properties(${CMAKE_CURRENT_LIST_DIR}/luafunctions.cpp
+                                PROPERTIES LANGUAGE CXX COMPILE_FLAGS "-g0 -Os")
+endif()
 
 # some build options
 option(LUAJIT "Use lua jit" ON)
@@ -170,9 +172,9 @@ endif()
 
 set (CMAKE_CXX_STANDARD 17)
 
-# gcc compile flags
-set(WARNS_FLAGS "-Wall -Wextra -Wno-unused -Wno-unused-parameter -Wno-unused-result")
+# compiler flags
 if(WASM)
+    set(WARNS_FLAGS "-Wall -Wextra -Wno-unused -Wno-unused-parameter -Wno-unused-result")
     set(CMAKE_CXX_FLAGS                   "${CMAKE_CXX_FLAGS} ${WARNS_FLAGS} ${ARCH_FLAGS} -s USE_ZLIB=1 -s USE_LIBPNG=1 -s USE_SDL=2 -s USE_BOOST_HEADERS=1 -s USE_PTHREADS=1 -O1") # add -Ofast
     set(framework_INCLUDE_DIRS ${framework_INCLUDE_DIRS} 
             D:\\wasm\\physfs\\src 
@@ -190,12 +192,24 @@ if(WASM)
     set(framework_SOURCES ${framework_SOURCES} ${LUA_SRC})
     message(STATUS "LUA: " ${LUA_SRC})
 else()
-    set(CMAKE_CXX_FLAGS                   "${CMAKE_CXX_FLAGS} ${WARNS_FLAGS} ${ARCH_FLAGS} -pipe")
-    set(CMAKE_CXX_FLAGS_COMPILESPEED      "-O0")
-    set(CMAKE_CXX_FLAGS_DEBUG             "-O0 -g")
-    set(CMAKE_CXX_FLAGS_RELWITHDEBINFO    "-O1 -g -fno-omit-frame-pointer")
-    set(CMAKE_CXX_FLAGS_RELEASE           "-O2")
-    set(CMAKE_CXX_FLAGS_PERFORMANCE       "-Ofast -march=native")
+    if(NOT MSVC)
+        # GCC/Clang flags only
+        set(WARNS_FLAGS "-Wall -Wextra -Wno-unused -Wno-unused-parameter -Wno-unused-result")
+        set(CMAKE_CXX_FLAGS                   "${CMAKE_CXX_FLAGS} ${WARNS_FLAGS} ${ARCH_FLAGS} -pipe")
+        set(CMAKE_CXX_FLAGS_COMPILESPEED      "-O0")
+        set(CMAKE_CXX_FLAGS_DEBUG             "-O0 -g")
+        set(CMAKE_CXX_FLAGS_RELWITHDEBINFO    "-O1 -g -fno-omit-frame-pointer")
+        set(CMAKE_CXX_FLAGS_RELEASE           "-O2")
+        set(CMAKE_CXX_FLAGS_PERFORMANCE       "-Ofast -march=native")
+    else()
+        # MSVC flags only
+        set(CMAKE_CXX_FLAGS                   "${CMAKE_CXX_FLAGS} /w /bigobj")
+        set(CMAKE_CXX_FLAGS_COMPILESPEED      "/Od")
+        set(CMAKE_CXX_FLAGS_DEBUG             "/Od /Zi")
+        set(CMAKE_CXX_FLAGS_RELWITHDEBINFO    "/O1 /Zi")
+        set(CMAKE_CXX_FLAGS_RELEASE           "/O2 /Oi /Gy")
+        set(CMAKE_CXX_FLAGS_PERFORMANCE       "/O2 /Oi /Gy /arch:AVX2")
+    endif()
 endif()
 
 if(USE_LTO)
@@ -228,22 +242,57 @@ add_definitions(-D"BUILD_REVISION=${BUILD_REVISION}")
 message(STATUS "Build with encryption")
 add_definitions(-D"WITH_ENCRYPTION")
 
+# Force Boost.Process to use v1 API for compatibility
+add_definitions(-DBOOST_PROCESS_VERSION=1)
+add_definitions(-DBOOST_PROCESS_USE_V1)
+
 # main libs
 if(NOT WASM)
     # find boost
-    set(REQUIRED_BOOST_COMPONENTS system filesystem)
+    add_definitions(-DNOMINMAX)
+    set(REQUIRED_BOOST_COMPONENTS system filesystem process)
     set(Boost_USE_MULTITHREADED ON)
     set(Boost_USE_STATIC_LIBS ${USE_STATIC_LIBS})
-    find_package(Boost 1.67.0 COMPONENTS ${REQUIRED_BOOST_COMPONENTS} REQUIRED)
+    find_package(Boost 1.89.0 COMPONENTS ${REQUIRED_BOOST_COMPONENTS} REQUIRED)
 
-    #find zip
-    find_package(LibZip REQUIRED)
-    find_package(ZLIB REQUIRED)
-    find_package(BZip2 REQUIRED)
+    #find zip - COMPLETE bypass: create imported targets manually
+    # Create ZLIB::ZLIB imported target to avoid broken FindZLIB.cmake
+    if(NOT TARGET ZLIB::ZLIB)
+        add_library(ZLIB::ZLIB STATIC IMPORTED)
+        set_target_properties(ZLIB::ZLIB PROPERTIES
+            INTERFACE_INCLUDE_DIRECTORIES "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/include"
+            IMPORTED_LOCATION "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib/zlib.lib"
+            IMPORTED_LOCATION_DEBUG "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/debug/lib/zlibd.lib"
+        )
+    endif()
+    
+    # Create libzip::zip imported target manually to avoid its broken config
+    if(NOT TARGET libzip::zip)
+        add_library(libzip::zip STATIC IMPORTED)
+        set_target_properties(libzip::zip PROPERTIES
+            INTERFACE_INCLUDE_DIRECTORIES "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/include"
+            IMPORTED_LOCATION "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib/zip.lib"
+            IMPORTED_LOCATION_DEBUG "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/debug/lib/zipd.lib"
+            INTERFACE_LINK_LIBRARIES "ZLIB::ZLIB"
+        )
+    endif()
+    set(LIBZIP_LIBRARY libzip::zip)
+    set(LIBZIP_INCLUDE_DIR "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/include")
+    set(LIBZIP_FOUND TRUE)
+    
+    # BZip2 direct configuration 
+    set(BZIP2_INCLUDE_DIR "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/include")
+    set(BZIP2_LIBRARY_RELEASE "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib/bz2.lib")
+    set(BZIP2_LIBRARY_DEBUG "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/debug/lib/bz2d.lib")
+    set(BZIP2_FOUND TRUE)
 
-    #find lua
+    #find lua - manually configure for vcpkg luajit since it doesn't provide cmake config
     if(LUAJIT)
-        find_package(LuaJIT REQUIRED)
+        # Manually set LuaJIT variables for vcpkg
+        set(LUAJIT_INCLUDE_DIR "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/include/luajit")
+        set(LUAJIT_LIBRARY "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib/lua51.lib")
+        set(LUAJIT_FOUND TRUE)
+        
         set(LUA_INCLUDE_DIR ${LUAJIT_INCLUDE_DIR})
         set(LUA_LIBRARY ${LUAJIT_LIBRARY})
 
@@ -255,9 +304,17 @@ if(NOT WASM)
     endif()
     message(STATUS "LuaJIT: " ${LUAJIT})
 
-    find_package(PhysFS REQUIRED)
-    find_package(OpenSSL REQUIRED)
-    find_package(ZLIB REQUIRED)
+    # Manually configure PhysFS to avoid issues
+    set(PHYSFS_INCLUDE_DIR "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/include")
+    set(PHYSFS_LIBRARY "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib/physfs.lib")
+    set(PHYSFS_FOUND TRUE)
+    
+    # Manually configure OpenSSL to avoid issues
+    set(OPENSSL_INCLUDE_DIR "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/include")
+    set(OPENSSL_SSL_LIBRARY "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib/libssl.lib")
+    set(OPENSSL_CRYPTO_LIBRARY "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib/libcrypto.lib")
+    set(OPENSSL_LIBRARIES "${OPENSSL_SSL_LIBRARY}" "${OPENSSL_CRYPTO_LIBRARY}")
+    set(OPENSSL_FOUND TRUE)
 
     set(framework_LIBRARIES ${framework_LIBRARIES}
         ${Boost_LIBRARIES}
@@ -266,12 +323,15 @@ if(NOT WASM)
         ${OPENSSL_LIBRARIES}
         ${ZLIB_LIBRARY}
         ${LIBZIP_LIBRARY}
-	${ZLIB_LIBRARY}
 	${BZIP2_LIBRARIES}
     )
 
     if(WIN32)
-        set(framework_LIBRARIES ${framework_LIBRARIES} -lbcrypt -ldbghelp -lshlwapi -liphlpapi -lpsapi)
+        if(MSVC)
+            set(framework_LIBRARIES ${framework_LIBRARIES} bcrypt dbghelp shlwapi iphlpapi psapi winmm)
+        else()
+            set(framework_LIBRARIES ${framework_LIBRARIES} -lbcrypt -ldbghelp -lshlwapi -liphlpapi -lpsapi -lwinmm)
+        endif()
     endif()
 
     set(framework_INCLUDE_DIRS ${framework_INCLUDE_DIRS}
@@ -293,7 +353,7 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInf
 else()
     message(STATUS "Debug information: OFF")
     set(framework_DEFINITIONS ${framework_DEFINITIONS} -DNDEBUG) # NDEBUG disable asserts
-    if(NOT APPLE)
+    if(NOT APPLE AND NOT MSVC)
         set(CMAKE_CXX_LINK_FLAGS "${CMAKE_CXX_LINK_FLAGS} -Wl,-s") # strip all debug information
         if(NOT WASM)
             set(CMAKE_CXX_LINK_FLAGS "${CMAKE_CXX_LINK_FLAGS} -Wl,--as-needed") # only link needed libraries
@@ -316,8 +376,10 @@ if(USE_LIBCPP)
 endif()
 
 if(WIN32)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mthreads")
-    set(framework_DEFINITIONS ${framework_DEFINITIONS} -D_WIN32_WINNT=0x0501 -DWIN32)
+    if(MINGW)
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mthreads")
+    endif()
+    set(framework_DEFINITIONS ${framework_DEFINITIONS} -D_WIN32_WINNT=0x0501 -DWIN32 -DNOMINMAX)
     #set(CMAKE_CXX_LINK_FLAGS "${CMAKE_CXX_LINK_FLAGS} -Wl,--large-address-aware") # strip all debug information
     set(SYSTEM_LIBRARIES "")
 else()

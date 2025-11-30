@@ -1,0 +1,166 @@
+MiniWindow
+  id: explorerToolsPanel
+  !text: tr('Explorer Tools')
+  height: 500
+  @onClose: modules.client_mapexplorer.ToolsPanelController.onClose()
+  &save: true
+  &autoOpen: false
+  
+  MiniWindowContents
+    padding: 5
+    layout: verticalBox
+    
+    Panel
+      height: 50
+      layout: anchor
+      
+      Label
+        !text: tr('Light Intensity')
+        anchors.top: parent.top
+        anchors.left: parent.left
+        margin-top: 5
+
+      Button
+        !text: tr('Reset')
+        anchors.verticalCenter: prev.verticalCenter
+        anchors.right: parent.right
+        width: 40
+        height: 14
+        font: verdana-11px-monochrome
+        @onClick: MapExplorer.onLightChange(255); modules.client_mapexplorer.ToolsPanelController.resetLightScroll()
+
+      HorizontalScrollBar
+        id: lightScroll
+        anchors.top: prev.bottom
+        anchors.left: parent.left
+        anchors.right: parent.right
+        margin-top: 5
+        minimum: 0
+        maximum: 255
+        step: 1
+        value: 255
+        @onValueChange: MapExplorer.onLightChange(self:getValue())
+
+    Panel
+      height: 160
+      layout: anchor
+      
+      Label
+        !text: tr('Light Color')
+        anchors.top: parent.top
+        anchors.left: parent.left
+        margin-top: 5
+
+      Button
+        !text: tr('Reset')
+        anchors.verticalCenter: prev.verticalCenter
+        anchors.right: parent.right
+        width: 40
+        height: 14
+        font: verdana-11px-monochrome
+        @onClick: MapExplorer.onColorChange(215)
+
+      UIWidget
+        id: paletteContainer
+        anchors.top: prev.bottom
+        anchors.left: parent.left
+        anchors.right: parent.right
+        height: 128
+        margin-top: 5
+        layout:
+          type: grid
+          cell-size: 12 12
+          cell-spacing: 1
+          flow: true
+
+    Panel
+      height: 50
+      layout: anchor
+      
+      Label
+        !text: tr('Speed')
+        anchors.top: parent.top
+        anchors.left: parent.left
+        margin-top: 5
+
+      Button
+        !text: tr('Reset')
+        anchors.verticalCenter: prev.verticalCenter
+        anchors.right: parent.right
+        width: 40
+        height: 14
+        font: verdana-11px-monochrome
+        @onClick: MapExplorer.onSpeedChange(200); modules.client_mapexplorer.ToolsPanelController.resetSpeedScroll()
+
+      HorizontalScrollBar
+        id: speedScroll
+        anchors.top: prev.bottom
+        anchors.left: parent.left
+        anchors.right: parent.right
+        margin-top: 5
+        minimum: 100
+        maximum: 2000
+        step: 50
+        value: 200
+        @onValueChange: MapExplorer.onSpeedChange(self:getValue())
+
+    Panel
+      height: 50
+      layout: anchor
+      
+      Label
+        !text: tr('Zoom Speed')
+        anchors.top: parent.top
+        anchors.left: parent.left
+        margin-top: 5
+
+      Button
+        !text: tr('Reset')
+        anchors.verticalCenter: prev.verticalCenter
+        anchors.right: parent.right
+        width: 40
+        height: 14
+        font: verdana-11px-monochrome
+        @onClick: MapExplorer.onZoomSpeedChange(1); modules.client_mapexplorer.ToolsPanelController.resetZoomSpeedScroll()
+
+      HorizontalScrollBar
+        id: zoomSpeedScroll
+        anchors.top: prev.bottom
+        anchors.left: parent.left
+        anchors.right: parent.right
+        margin-top: 5
+        minimum: 1
+        maximum: 5
+        step: 1
+        value: 1
+        @onValueChange: modules.client_mapexplorer.ToolsPanelController.onZoomSpeedChange(self:getValue())
+      
+    Button
+      id: outfitButton
+      !text: tr('Change Outfit')
+      margin-top: 5
+
+    Button
+      id: resetViewButton
+      !text: tr('Reset View')
+      margin-top: 5
+      @onClick: MapExplorer.resetView()
+
+    Button
+      id: spawnSimButton
+      !text: tr('Spawn Simulator')
+      margin-top: 5
+      @onClick: MapExplorer.toggleSpawnSimulator()
+
+    CheckBox
+      id: scrollFloorCheck
+      !text: tr('Scroll to change floor')
+      margin-top: 10
+      checked: true
+      @onCheckChange: modules.client_mapexplorer.ExplorerState.setScrollFloorChangeEnabled(self:isChecked())
+
+    Button
+      id: openMapButton
+      !text: tr('Open Map')
+      margin-top: 5
+      @onClick: MapExplorer.show()

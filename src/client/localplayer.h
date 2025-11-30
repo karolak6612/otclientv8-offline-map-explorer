@@ -43,6 +43,12 @@ public:
     void stopAutoWalk();
     bool autoWalk(Position destination, bool retry = false);
     bool canWalk(Otc::Direction direction, bool ignoreLock = false);
+    void setNoClipMode(bool enable) { m_noClipMode = enable; }
+    bool isNoClipEnabled() { return m_noClipMode; }
+    
+    // Offline mode instant position change
+    void setPositionInstant(const Position& pos, bool updateCamera = true);
+    
     bool isWalkLocked() {
         return (m_walkLockExpiration != 0 && g_clock.millis() < m_walkLockExpiration);
     }
@@ -70,6 +76,10 @@ public:
     void setOfflineTrainingTime(double offlineTrainingTime);
     void setSpells(const std::vector<int>& spells);
     void setBlessings(int blessings);
+    
+    // Offline mode support for map explorer
+    void setOfflineMode(bool offline) { m_offlineMode = offline; }
+    bool isOfflineMode() { return m_offlineMode; }
 
     int getStates() { return m_states; }
     int getSkillLevel(uint8_t skill) { return skill < m_skillsLevel.size() ? m_skillsLevel[skill] : 0; }
@@ -107,6 +117,7 @@ public:
     bool isLocalPlayer() override { return true; }
 
     void onAppear() override;
+    void onDisappear() override;
     void onPositionChange(const Position& newPos, const Position& oldPos) override;
 
     // pre walking
@@ -166,6 +177,8 @@ private:
     std::list<Position> m_preWalking;
     bool m_serverWalking = false;
     bool m_lastPrewalkDone = false;
+    bool m_offlineMode = false; // Map explorer offline mode
+    bool m_noClipMode = false;
     WalkMatrix m_walkMatrix;
 
     bool m_premium = false;

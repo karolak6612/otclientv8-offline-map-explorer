@@ -201,7 +201,7 @@ void DrawQueue::setFrameBuffer(const Rect& dest, const Size& size, const Rect& s
     m_frameBufferSize = size;
     m_frameBufferDest = dest;
     m_frameBufferSrc = src;
-    size_t max_size = std::max(m_frameBufferSize.width(), m_frameBufferSize.height());
+    size_t max_size = std::max<size_t>(m_frameBufferSize.width(), m_frameBufferSize.height());
     while(max_size > 2048u) {
         max_size /= 2;
         m_scaling /= 2.f;

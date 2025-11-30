@@ -34,6 +34,8 @@ LocalPlayer::LocalPlayer()
     m_vocation = 0;
     m_blessings = Otc::BlessingNone;
     m_walkLockExpiration = 0;
+    m_offlineMode = false; // Default to online mode
+    m_noClipMode = false;
 
     m_skillsLevel.resize(Otc::LastSkill + 1, 0);
     m_skillsBaseLevel.resize(Otc::LastSkill + 1, 0);
@@ -71,6 +73,8 @@ void LocalPlayer::lockWalk(int millis)
 
 bool LocalPlayer::canWalk(Otc::Direction direction, bool ignoreLock)
 {
+    if (m_noClipMode) return true;
+
     // cannot walk while locked
     if ((m_walkLockExpiration != 0 && g_clock.millis() < m_walkLockExpiration) && !ignoreLock)
         return false;
@@ -78,8 +82,6 @@ bool LocalPlayer::canWalk(Otc::Direction direction, bool ignoreLock)
     // paralyzed
     if (m_speed == 0)
         return false;
-
-    // last walk is not done yet
     if (m_walking && (m_walkTimer.ticksElapsed() < getStepDuration()) && !isAutoWalking() && !isServerWalking())
         return false;
 
@@ -178,6 +180,12 @@ void LocalPlayer::cancelNewWalk(Otc::Direction dir)
 {
     if (g_extras.debugWalking) {
         g_logger.info(stdext::format("[%i] cancelWalk", (int)g_clock.millis()));
+    }
+    
+    // Offline mode: Don't cancel walks
+    if (m_offlineMode) {
+        g_logger.info("[Offline] Skipping walk cancellation");
+        return;
     }
 
     bool clearedPrewalk = !m_preWalking.empty();
@@ -317,6 +325,11 @@ void LocalPlayer::cancelWalk(Otc::Direction direction)
     if (g_game.getFeature(Otc::GameNewWalking)) {
         return;
     }
+    
+    // Offline mode: Don't cancel walks, they are confirmed locally
+    if (m_offlineMode) {
+        return;
+    }
 
     return cancelNewWalk(direction);
 }
@@ -368,6 +381,62 @@ void LocalPlayer::updateWalk()
 
     Creature::updateWalk();
 
+    // Offline mode: Commit prewalk immediately without server confirmation
+    if (m_offlineMode && m_walking && isPreWalking() && m_walkTimer.ticksElapsed() >= getStepDuration()) {
+        g_logger.info(stdext::format("[CRASH DEBUG] Offline walk update starting, m_preWalking.size=%d", (int)m_preWalking.size()));
+        
+        // Fix: Update logical position to match the visual movement
+        if (!m_preWalking.empty()) {
+            Position newPos = m_preWalking.front();
+            g_logger.info(stdext::format("[CRASH DEBUG] New position: (%d,%d,%d)", newPos.x, newPos.y, newPos.z));
+            
+            // CRITICAL: Add NULL checks before tile operations
+            TilePtr oldTile = getTile();
+            g_logger.info(stdext::format("[CRASH DEBUG] Old tile: %s", oldTile ? "EXISTS" : "NULL"));
+            
+            TilePtr newTile = g_map.getTile(newPos);
+            g_logger.info(stdext::format("[CRASH DEBUG] New tile: %s", newTile ? "EXISTS" : "NULL"));
+            
+            // Extra safety: Check if m_noClipMode allows walking to NULL tiles
+            if (!newTile && !m_noClipMode) {
+                g_logger.error(stdext::format("[CRASH DEBUG] Cannot walk to NULL tile at (%d,%d,%d) - stopping walk",
+                    newPos.x, newPos.y, newPos.z));
+                m_preWalking.clear();
+                stopWalk();
+                return;
+            }
+            
+            if (oldTile) {
+                g_logger.info("[CRASH DEBUG] About to call oldTile->removeThing");
+                oldTile->removeThing(asLocalPlayer());
+                g_logger.info("[CRASH DEBUG] oldTile->removeThing completed");
+            } else {
+                g_logger.warning("[CRASH DEBUG] Old tile is NULL, skipping removeThing");
+            }
+            
+            g_logger.info("[CRASH DEBUG] About to call setPosition");
+            setPosition(newPos);
+            g_logger.info("[CRASH DEBUG] setPosition completed");
+            
+            if (newTile) {
+                g_logger.info("[CRASH DEBUG] About to call newTile->addThing");
+                newTile->addThing(asLocalPlayer(), -1);
+                g_logger.info("[CRASH DEBUG] newTile->addThing completed");
+            } else if (m_noClipMode) {
+                g_logger.info("[CRASH DEBUG] New tile is NULL but NoClip enabled, position updated without tile");
+            }
+        }
+
+        m_lastPrewalkDone = true;
+        // In offline mode, only remove the finished step
+        if (!m_preWalking.empty()) {
+            m_preWalking.pop_front();
+        }
+        g_logger.info("[CRASH DEBUG] Offline walk update completed successfully");
+        // Don't call terminateWalk() - just mark as done
+        return;
+    }
+
     // terminate walk only when client and server side walk are completed
     if (m_walking && m_walkTimer.ticksElapsed() >= getStepDuration()) {
         m_lastPrewalkDone = true;
@@ -409,6 +478,24 @@ void LocalPlayer::onAppear()
     if(!m_oldPosition.isInRange(m_position,1,1))
         lockWalk();
     */
+}
+
+void LocalPlayer::onDisappear()
+{
+    // Offline mode: Don't disappear - no server desync possible
+    if (m_offlineMode) {
+        g_logger.info(stdext::format("[Offline-%s] Skipping disappear logic - no position reset needed (pos: %s)", 
+            g_game.getFeature(Otc::GameNewWalking) ? "New" : "Old", 
+            m_position.toString()));
+        return;
+    }
+
+    g_logger.info(stdext::format("[Online-%s] LocalPlayer::onDisappear() called (pos: %s)", 
+        g_game.getFeature(Otc::GameNewWalking) ? "New" : "Old", 
+        m_position.toString()));
+
+    // Online mode: Call base class implementation
+    Creature::onDisappear();
 }
 
 void LocalPlayer::onPositionChange(const Position& newPos, const Position& oldPos)
@@ -666,4 +753,42 @@ void LocalPlayer::setBlessings(int blessings)
 bool LocalPlayer::hasSight(const Position& pos)
 {
     return m_position.isInRange(pos, g_map.getAwareRange().left - 1, g_map.getAwareRange().top - 1);
+}
+void LocalPlayer::setPositionInstant(const Position& pos, bool updateCamera)
+{
+    // Validate position first
+    if(!g_map.isPositionWithinMapBounds(pos)) {
+        g_logger.debug("setPositionInstant: Position out of bounds " + std::to_string(pos.x) + "," + std::to_string(pos.y) + "," + std::to_string(pos.z));
+        return;  // Don't set invalid position
+    }
+    
+    Position oldPos = m_position;
+    
+    // Remove from old tile if exists
+    const TilePtr& oldTile = g_map.getTile(oldPos);
+    if(oldTile) {
+        oldTile->removeThing(static_self_cast<Creature>());
+    }
+    
+    // Update position (call parent)
+    Creature::setPosition(pos);
+    
+    // Add to new tile if exists
+    const TilePtr& newTile = g_map.getTile(pos);
+    if(newTile) {
+        newTile->addThing(static_self_cast<Creature>(), -1);
+    }
+    
+    // Clear walk state for clean movement
+    m_walking = false;
+    m_preWalking.clear();
+    m_walkTimer.restart();
+    
+    // Update camera if requested
+    if(updateCamera && g_map.getCentralPosition() != pos) {
+        g_map.setCentralPosition(pos);
+    }
+    
+    // Log position change (can't call Lua event automatically due to Position type)
+    g_logger.debug("Instant position change completed");
 }
