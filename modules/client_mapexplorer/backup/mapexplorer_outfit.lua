@@ -1,8 +1,5 @@
 MapExplorerOutfit = {}
 
--- Phase 1: Import configuration module
-local Config = dofile('config/explorer_config.lua')
-
 function MapExplorerOutfit.openWindow()
   g_logger.info("MapExplorerOutfit: openWindow called")
   local player = g_game.getLocalPlayer()
@@ -121,7 +118,7 @@ function MapExplorerOutfit.getValidOutfits()
   
   -- Scan for valid outfits
   -- Limit to 2000 or until 10 consecutive failures
-  for i = 1, Config.MAX_OUTFIT_SCAN do
+  for i = 1, 2000 do
     if MapExplorerOutfit.isValidOutfit(i) then
       table.insert(outfits, {i, "Outfit " .. i})
       consecutiveInvalid = 0
@@ -129,7 +126,7 @@ function MapExplorerOutfit.getValidOutfits()
       consecutiveInvalid = consecutiveInvalid + 1
     end
     
-    if consecutiveInvalid >= Config.CONSECUTIVE_INVALID_LIMIT then
+    if consecutiveInvalid >= 10 then
       break
     end
   end
@@ -152,5 +149,5 @@ end
 
 function MapExplorerOutfit.getMaxAddonsForOutfit(typeId)
   -- Simplified: assume 3 addons (0, 1, 2, 3)
-  return Config.MAX_ADDONS
+  return 3
 end

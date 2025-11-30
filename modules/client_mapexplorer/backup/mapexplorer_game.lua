@@ -1,19 +1,18 @@
 MapExplorerGame = {}
 
-local Config = dofile('config/explorer_config.lua')
-local ExplorerState = dofile('state/explorer_state.lua')
-local EventBus = dofile('events/event_bus.lua')
-local Events = dofile('events/event_definitions.lua')
+local selectedMapPath = ""
+local selectedVersion = 1098
+local lastPlayerPos = nil
+local currentLight = 255
+local currentColor = 215
+local currentZoomSpeed = 1
 
 function MapExplorerGame.init()
   g_logger.info("MapExplorerGame: init() called")
   
-  -- Load last used settings into State
-  local lastPath = g_settings.getString(Config.SETTINGS_KEYS.LAST_MAP_PATH, '')
-  ExplorerState.setMapPath(lastPath)
-  
-  local lastVersion = g_settings.getNumber(Config.SETTINGS_KEYS.CLIENT_VERSION, 1098)
-  ExplorerState.setMapVersion(lastVersion)
+  -- Load last used settings
+  selectedMapPath = g_settings.getString('mapexplorer/lastMapPath', '')
+  selectedVersion = g_settings.getNumber('mapexplorer/clientVersion', 1098)
   
   SpawnSimulator.init()
   
@@ -50,22 +49,11 @@ function MapExplorerGame.init()
       end
     end
   end
-  -- Subscribe to events
-  EventBus.on(Events.LIGHT_CHANGE, MapExplorerGame.onLightChangeEvent)
-  EventBus.on(Events.PLAYER_SPEED_CHANGE, MapExplorerGame.onSpeedChangeEvent)
-  EventBus.on(Events.NO_CLIP_CHANGE, MapExplorerGame.onNoClipChangeEvent)
-  EventBus.on(Events.ZOOM_CHANGE, MapExplorerGame.onZoomChangeEvent)
 end
 
 function MapExplorerGame.terminate()
-  EventBus.off(Events.LIGHT_CHANGE, MapExplorerGame.onLightChangeEvent)
-  EventBus.off(Events.PLAYER_SPEED_CHANGE, MapExplorerGame.onSpeedChangeEvent)
-  EventBus.off(Events.NO_CLIP_CHANGE, MapExplorerGame.onNoClipChangeEvent)
-  EventBus.off(Events.ZOOM_CHANGE, MapExplorerGame.onZoomChangeEvent)
-
   disconnect(g_game, { onGameStart = MapExplorerGame.onGameStart,
                        onGameEnd = MapExplorerGame.onGameEnd })
-
   
   g_keyboard.unbindKeyPress('PageUp', MapExplorerGame.floorUp)
   g_keyboard.unbindKeyPress('PageDown', MapExplorerGame.floorDown)
@@ -107,8 +95,8 @@ end
 
 function MapExplorerGame.onGameStart()
   g_logger.info("MapExplorerGame: onGameStart")
-  g_logger.info("MapExplorerGame: onGameStart")
-  -- UI updates handled by MAP_LOADED event
+  MapExplorerUI.hide() -- Hide file browser if open
+  MapExplorerUI.showTools() -- Show tools panel
   
   -- Hide EnterGame window
   if modules.client_entergame and modules.client_entergame.EnterGame then
@@ -117,7 +105,7 @@ function MapExplorerGame.onGameStart()
   
   -- Disable game_walking module to prevent conflict
   if modules.game_walking then
-    g_modules.ensureModuleLoaded('game_walking') 
+    g_modules.ensureModuleLoaded('game_walking') -- Ensure it's loaded so we can unload it properly? No, just check if loaded.
     if modules.game_walking.loaded then
       modules.game_walking.terminate()
     end
@@ -134,13 +122,13 @@ function MapExplorerGame.onGameStart()
   -- Initialize Extended Rendering (7x7 chunks to prevent black tiles on zoom)
   local mapPanel = modules.game_interface.getMapPanel()
   if mapPanel then
-    mapPanel:setDrawBuffer({width=Config.DRAW_BUFFER_SIZE, height=Config.DRAW_BUFFER_SIZE})
+    mapPanel:setDrawBuffer({width=7, height=7})
     
     -- Hook Zoom (Ctrl + Scroll)
     local originalOnMouseWheel = mapPanel.onMouseWheel
     mapPanel.onMouseWheel = function(widget, mousePos, direction)
       if g_keyboard.isCtrlPressed() then
-        local speed = ExplorerState.getZoomSpeed()
+        local speed = currentZoomSpeed or 1
         for i = 1, speed do
             if direction == MouseWheelUp then
               widget:zoomIn()
@@ -182,6 +170,8 @@ function MapExplorerGame.onGameStart()
     mapPanel.onMousePress = function(widget, mousePos, mouseButton)
         if mouseButton == MouseLeftButton then
              -- Always consume Left Click to prevent default drag/walk behavior
+             -- This prevents the crash.
+             -- Teleport logic is handled in onMouseRelease (which still fires).
              return true
         end
         
@@ -217,20 +207,21 @@ function MapExplorerGame.onGameStart()
   end
   
   -- Initialize Palette
-  -- Palette initialized in UI module
+  MapExplorerGame.initPalette()
 end
 
 function MapExplorerGame.resetView()
   local mapPanel = modules.game_interface.getMapPanel()
   if mapPanel then
     -- Reset Zoom (set visible dimension to default)
-    mapPanel:setVisibleDimension({width = Config.DEFAULT_VISIBLE_WIDTH, height = Config.DEFAULT_VISIBLE_HEIGHT})
-    mapPanel:setZoom(Config.DEFAULT_ZOOM_LEVEL) -- Sync internal zoom state
+    mapPanel:setVisibleDimension({width = 15, height = 11})
+    mapPanel:setZoom(11) -- Sync internal zoom state
     
     -- Reset Zoom Speed
-    ExplorerState.setZoomSpeed(Config.DEFAULT_ZOOM_SPEED)
-    -- Reset Zoom Speed
-    ExplorerState.setZoomSpeed(Config.DEFAULT_ZOOM_SPEED)
+    currentZoomSpeed = 1
+    if MapExplorerUI.explorerPanel then
+        MapExplorerUI.explorerPanel:getChildById('zoomSpeedScroll'):setValue(1)
+    end
     
     -- Center on player
     local player = g_game.getLocalPlayer()
@@ -242,9 +233,8 @@ end
 
 function MapExplorerGame.onGameEnd()
   g_logger.info("MapExplorerGame: onGameEnd")
-  g_logger.info("MapExplorerGame: onGameEnd")
   MapExplorerGame.saveMapState()
-  ExplorerState.setMapLoaded(false)
+  MapExplorerUI.hideTools()
   
   -- Re-enable game_walking module
   if modules.game_walking then
@@ -252,16 +242,23 @@ function MapExplorerGame.onGameEnd()
   end
 end
 
+function MapExplorerGame.onGameEnd()
+  g_logger.info("MapExplorerGame: onGameEnd")
+  MapExplorerGame.saveMapState()
+  MapExplorerUI.hideTools()
+end
+
 function MapExplorerGame.setSelectedMap(path)
-  ExplorerState.setMapPath(path)
+  selectedMapPath = path
+  g_settings.set('mapexplorer/lastMapPath', path)
   
   -- Auto-detect version from path
   local versionMatch = path:match("/things/(%d+)/")
   if versionMatch then
-    local version = tonumber(versionMatch)
-    ExplorerState.setMapVersion(version)
-    g_settings.set('client-version', version) -- Update global setting for EnterGame
-    MapExplorerUI.setStatus("Detected client version: " .. version)
+    selectedVersion = tonumber(versionMatch)
+    g_settings.set('mapexplorer/clientVersion', selectedVersion)
+    g_settings.set('client-version', selectedVersion) -- Update global setting for EnterGame
+    MapExplorerUI.setStatus("Detected client version: " .. selectedVersion)
   end
 end
 
@@ -269,9 +266,7 @@ end
 MapExplorer = {}
 
 function MapExplorer.show(version)
-  if version then
-      ExplorerState.setMapVersion(version)
-  end
+  selectedVersion = version or 1098
   MapExplorerUI.show()
 end
 
@@ -280,7 +275,6 @@ function MapExplorer.hide()
 end
 
 function MapExplorerGame.loadSelectedMap()
-  local selectedMapPath = ExplorerState.getMapPath()
   if selectedMapPath == "" then
     MapExplorerUI.setStatus("No map selected")
     return
@@ -300,12 +294,11 @@ function MapExplorerGame.loadSelectedMap()
       g_game.processGameEnd()
     end
     
-    local selectedVersion = ExplorerState.getMapVersion()
     g_game.setClientVersion(selectedVersion)
     g_game.setProtocolVersion(g_game.getClientProtocolVersion(selectedVersion))
     
-    -- Load Assets
-    local dataDir = string.format(Config.DATA_DIR_TEMPLATE, selectedVersion)
+    -- Load Assets (Exact copy from mapexplorer_temp.lua)
+    local dataDir = '/data/things/' .. selectedVersion
     if not g_things.loadDat(dataDir .. '/Tibia') then
       MapExplorerUI.setStatus("Failed to load DAT file")
       return
@@ -332,7 +325,7 @@ function MapExplorerGame.loadSelectedMap()
     -- Clear existing map
     g_map.clean()
     
-    -- Load OTBM
+    -- Load OTBM (using pcall as it might raise error, and returns nil on success)
     local status, err = pcall(function()
       g_map.loadOtbm(mapPath)
     end)
@@ -344,20 +337,20 @@ function MapExplorerGame.loadSelectedMap()
     end
     
     MapExplorerUI.setStatus("Map loaded!")
-    MapExplorerUI.setStatus("Map loaded!")
-    ExplorerState.setMapLoaded(true)
+    MapExplorerUI.hide()
+    MapExplorerUI.showTools() -- Show the tools panel
     
     -- Set initial position (center of map or saved pos)
     local player = g_game.getLocalPlayer()
     if not player then
       player = LocalPlayer.create()
       player:setOfflineMode(true)
-      player:setName(Config.DEFAULT_PLAYER_NAME)
+      player:setName("MapExplorer")
       g_game.setLocalPlayer(player)
     end
     
     -- Reset light to default before loading state
-    ExplorerState.setLightIntensity(Config.DEFAULT_LIGHT_INTENSITY)
+    currentLight = 255
     
     -- Try to load state
     if not MapExplorerGame.loadMapState() then
@@ -366,7 +359,7 @@ function MapExplorerGame.loadSelectedMap()
       if not pos then
          -- Fallback to center if no valid tile found
          local mapSize = g_map.getSize()
-         pos = {x = math.floor(mapSize.width / 2), y = math.floor(mapSize.height / 2), z = Config.DEFAULT_FLOOR}
+         pos = {x = math.floor(mapSize.width / 2), y = math.floor(mapSize.height / 2), z = 7}
       end
       
       player:setPosition(pos)
@@ -380,11 +373,10 @@ function MapExplorerGame.loadSelectedMap()
     end
     
     -- Set ambient light (using loaded or default value)
-    local light = ExplorerState.getLight()
-    g_map.setLight(light)
-    -- Set ambient light (using loaded or default value)
-    local light = ExplorerState.getLight()
-    g_map.setLight(light)
+    g_map.setLight({intensity = currentLight, color = 215})
+    if MapExplorerUI.explorerPanel then
+        MapExplorerUI.explorerPanel:getChildById('lightScroll'):setValue(currentLight)
+    end
     
     -- Start game interface
     g_game.processGameStart()
@@ -397,7 +389,33 @@ function MapExplorerGame.loadSelectedMap()
   end, 100)
 end
 
+-- Remove local currentLight declaration here as it's now used above, 
+-- but we need to ensure it's declared at module level if not already.
+-- Checking file content, it was declared at line 257 in previous read, 
+-- but I am replacing the block that includes line 257.
+-- Wait, line 257 was `local currentLight = 255`.
+-- I need to make sure `currentLight` is available to `loadMapState` which is defined later?
+-- No, `loadMapState` is defined later.
+-- But `loadSelectedMap` uses `currentLight`.
+-- `currentLight` must be upvalue.
+-- In the previous file content, `local currentLight = 255` was at line 257, AFTER `loadSelectedMap` (lines 153-255).
+-- This means `loadSelectedMap` was using a global or nil `currentLight`?
+-- No, Lua functions capture upvalues. If `currentLight` is defined AFTER `loadSelectedMap`, `loadSelectedMap` can't see it unless it's global?
+-- Wait, if `currentLight` is local at file scope but defined AFTER the function, the function can't see it?
+-- Actually, in Lua, if I define `local currentLight` after, the function defined before will NOT see it.
+-- So `currentLight` inside `loadSelectedMap` (if I used it) would be nil or global.
+-- I need to move `local currentLight = 255` to the TOP of the file.
+-- I will check where `currentLight` is defined.
+-- In step 750 read, `local currentLight = 255` is at line 257. `loadSelectedMap` ends at line 255.
+-- So `loadSelectedMap` could NOT access `currentLight`!
+-- That explains why I hardcoded 255 in `loadSelectedMap`.
+-- I must move `local currentLight = 255` to the top of the file.
+
 function MapExplorerGame.findSpawnPosition()
+  -- Try to find a valid tile to spawn on
+  -- For now, we just return nil and let the fallback logic handle it
+  -- or we could implement a search here.
+  -- Since the fallback logic (lines 258+) handles nil, we just need the function to exist.
   return nil
 end
 
@@ -410,13 +428,13 @@ function MapExplorerGame.teleportTo(pos)
   if oldTile then oldTile:removeThing(player) end
   
   player:setPosition(pos)
-  ExplorerState.setPlayerPosition(pos)
   
   local newTile = g_map.getTile(pos)
   if newTile then 
     newTile:addThing(player, -1)
   end
   g_map.setCentralPosition(pos)
+  lastPlayerPos = pos
 end
 
 function MapExplorerGame.floorUp()
@@ -424,7 +442,7 @@ function MapExplorerGame.floorUp()
   if not player then return end
   local pos = player:getPosition()
   pos.z = pos.z - 1
-  if pos.z < Config.MIN_FLOOR then pos.z = Config.MIN_FLOOR end
+  if pos.z < 0 then pos.z = 0 end
   MapExplorerGame.teleportTo(pos)
 end
 
@@ -433,7 +451,7 @@ function MapExplorerGame.floorDown()
   if not player then return end
   local pos = player:getPosition()
   pos.z = pos.z + 1
-  if pos.z > Config.MAX_FLOOR then pos.z = Config.MAX_FLOOR end
+  if pos.z > 15 then pos.z = 15 end
   MapExplorerGame.teleportTo(pos)
 end
 
@@ -453,136 +471,142 @@ function MapExplorerGame.toggleNoClip(enabled)
   local player = g_game.getLocalPlayer()
   if player then
     player:setNoClipMode(enabled)
-    ExplorerState.setNoClipEnabled(enabled)
   end
 end
 
 function MapExplorerGame.onSpeedChange(value)
-  g_logger.info("Speed changed to: " .. tostring(value))
   local player = g_game.getLocalPlayer()
   if player then
     player:setSpeed(value)
     player:setBaseSpeed(value)
-    ExplorerState.setPlayerSpeed(value)
   end
 end
 
-function MapExplorerGame.onZoomSpeedChange(value)
-  g_logger.info("Zoom speed changed to: " .. tostring(value))
-  ExplorerState.setZoomSpeed(value)
+
+
+function MapExplorerGame.initPalette()
+  if not MapExplorerUI.explorerPanel then return end
+  
+  local paletteContainer = MapExplorerUI.explorerPanel:getChildById('paletteContainer')
+  if not paletteContainer then return end
+  
+  paletteContainer:destroyChildren()
+  
+  -- Generate Tibia 8-bit palette (approximate)
+  -- 6x6x6 color cube + grayscale
+  for i = 0, 215 do
+    local r = (math.floor(i / 36) % 6) * 51
+    local g = (math.floor(i / 6) % 6) * 51
+    local b = (i % 6) * 51
+    local color = string.format("#%02X%02X%02X", r, g, b)
+    
+    local widget = g_ui.createWidget('UIWidget', paletteContainer)
+    widget:setId('color_' .. i)
+    widget:setBackgroundColor(color)
+    widget:setBorderWidth(1)
+    widget:setBorderColor('black')
+    widget.onClick = function() 
+      MapExplorerGame.onColorChange(i)
+      -- Highlight selection
+      for _, child in pairs(paletteContainer:getChildren()) do
+        child:setBorderColor('black')
+        child:setBorderWidth(1)
+      end
+      widget:setBorderColor('white')
+      widget:setBorderWidth(2)
+    end
+  end
+  
+  -- Select default
+  local defaultWidget = paletteContainer:getChildById('color_' .. currentColor)
+  if defaultWidget then
+    defaultWidget:setBorderColor('white')
+    defaultWidget:setBorderWidth(2)
+  end
+end
+
+function MapExplorerGame.onLightChange(value)
+  currentLight = value
+  g_map.setLight({intensity = currentLight, color = currentColor})
 end
 
 function MapExplorerGame.onColorChange(value)
-  g_logger.info("Color changed to: " .. tostring(value))
-  ExplorerState.setLightColor(value)
-end
-
-function MapExplorerGame.onLightChangeEvent(intensity, color)
-  g_map.setLight({intensity=intensity, color=color})
-end
-
-function MapExplorerGame.onSpeedChangeEvent(speed)
-  local player = g_game.getLocalPlayer()
-  if player then
-    player:setSpeed(speed)
-    player:setBaseSpeed(speed)
-  end
-end
-
-function MapExplorerGame.onNoClipChangeEvent(enabled)
-  local player = g_game.getLocalPlayer()
-  if player then
-    player:setNoClipMode(enabled)
-  end
-end
-
-function MapExplorerGame.onZoomChangeEvent(level, speed)
-  -- Zoom logic reads directly from state in hooks
+  currentColor = value
+  g_map.setLight({intensity = currentLight, color = currentColor})
 end
 
 -- Expose to global MapExplorer for OTUI compatibility
 MapExplorer.onTeleport = MapExplorerGame.onTeleport
 MapExplorer.toggleSpawnSimulator = function() SpawnSimulatorUI.toggle() end
-MapExplorer.onLoadMap = MapExplorerGame.loadSelectedMap
-MapExplorer.resetView = MapExplorerGame.resetView
-
--- OTUI Callbacks (Delegate to State)
-MapExplorer.toggleNoClip = function(enabled) ExplorerState.setNoClipEnabled(enabled) end
-MapExplorer.onLightChange = function(value) ExplorerState.setLightIntensity(value) end
-MapExplorer.onColorChange = function(value) ExplorerState.setLightColor(value) end
-MapExplorer.onSpeedChange = function(value) ExplorerState.setPlayerSpeed(value) end
-MapExplorer.onZoomSpeedChange = function(value) ExplorerState.setZoomSpeed(value) end
-
--- Reset Functions
-MapExplorer.resetLight = function() 
-  ExplorerState.setLightIntensity(Config.DEFAULT_LIGHT_INTENSITY) 
-end
-MapExplorer.resetSpeed = function() 
-  ExplorerState.setPlayerSpeed(Config.DEFAULT_PLAYER_SPEED) 
-end
-MapExplorer.resetZoom = function() 
-  ExplorerState.setZoomSpeed(Config.DEFAULT_ZOOM_SPEED) 
-  MapExplorerGame.resetView()
-end
 
 function MapExplorerGame.getSelectedVersion()
-  return ExplorerState.getMapVersion()
+  return selectedVersion
 end
 
 function MapExplorerGame.saveMapState()
-  local selectedMapPath = ExplorerState.getMapPath()
   if not selectedMapPath or selectedMapPath == "" then return end
   local player = g_game.getLocalPlayer()
   if not player then return end
   
-  local key = Config.SETTINGS_KEYS.MAP_STATE_PREFIX .. g_crypt.md5Encode(selectedMapPath)
+  local key = 'map_state_' .. g_crypt.md5Encode(selectedMapPath)
   local state = {
     pos = player:getPosition(),
     outfit = player:getOutfit(),
     speed = player:getSpeed(),
-    light = ExplorerState.getLightIntensity(),
-    color = ExplorerState.getLightColor(),
-    zoomSpeed = ExplorerState.getZoomSpeed()
+    light = currentLight,
+    color = currentColor,
+    zoomSpeed = currentZoomSpeed
   }
   g_settings.setNode(key, state)
   g_settings.save()
 end
 
 function MapExplorerGame.loadMapState()
-  local selectedMapPath = ExplorerState.getMapPath()
   if not selectedMapPath or selectedMapPath == "" then return false end
-  local key = Config.SETTINGS_KEYS.MAP_STATE_PREFIX .. g_crypt.md5Encode(selectedMapPath)
+  local key = 'map_state_' .. g_crypt.md5Encode(selectedMapPath)
   local state = g_settings.getNode(key)
   
   if state and state.pos then
     local player = g_game.getLocalPlayer()
     if player then
       player:setPosition(state.pos)
-      ExplorerState.setPlayerPosition(state.pos)
-      
       if state.outfit then 
           player:setOutfit(state.outfit) 
-          ExplorerState.setPlayerOutfit(state.outfit)
       end
       if state.speed then 
          player:setSpeed(state.speed) 
-         ExplorerState.setPlayerSpeed(state.speed)
+         if MapExplorerUI.explorerPanel then
+            MapExplorerUI.explorerPanel:getChildById('speedScroll'):setValue(state.speed)
+         end
       end
-      
-      if state.zoomSpeed then 
-         ExplorerState.setZoomSpeed(state.zoomSpeed)
-      end
-      
       if state.light then
-         ExplorerState.setLightIntensity(state.light)
+         currentLight = state.light
+         if state.color then currentColor = state.color end
+         if state.zoomSpeed then 
+            currentZoomSpeed = state.zoomSpeed 
+            if MapExplorerUI.explorerPanel then
+                MapExplorerUI.explorerPanel:getChildById('zoomSpeedScroll'):setValue(currentZoomSpeed)
+            end
+         end
+         
+         g_map.setLight({intensity = currentLight, color = currentColor})
+         if MapExplorerUI.explorerPanel then
+            MapExplorerUI.explorerPanel:getChildById('lightScroll'):setValue(currentLight)
+            -- Update palette selection
+            local paletteContainer = MapExplorerUI.explorerPanel:getChildById('paletteContainer')
+            if paletteContainer then
+               for _, child in pairs(paletteContainer:getChildren()) do
+                 child:setBorderColor('black')
+                 child:setBorderWidth(1)
+               end
+               local selectedWidget = paletteContainer:getChildById('color_' .. currentColor)
+               if selectedWidget then
+                 selectedWidget:setBorderColor('white')
+                 selectedWidget:setBorderWidth(2)
+               end
+            end
+         end
       end
-      
-      if state.color then
-         ExplorerState.setLightColor(state.color)
-      end
-      
-      -- Force update map light
-      g_map.setLight(ExplorerState.getLight())
       return true
     end
   end
@@ -591,5 +615,5 @@ end
 
 function MapExplorerGame.autoSaveLoop()
   MapExplorerGame.saveMapState()
-  scheduleEvent(MapExplorerGame.autoSaveLoop, Config.AUTO_SAVE_INTERVAL_MS)
+  scheduleEvent(MapExplorerGame.autoSaveLoop, 5000) -- Save every 5 seconds
 end

@@ -1,25 +1,14 @@
 SpawnSimulatorUI = {}
 
-local ExplorerState = dofile('/modules/client_mapexplorer/state/explorer_state.lua')
-local EventBus = dofile('/modules/client_mapexplorer/events/event_bus.lua')
-local Events = dofile('/modules/client_mapexplorer/events/event_definitions.lua')
-
 local window = nil
 local monsterList = nil
 local statusLabel = nil
 
 function SpawnSimulatorUI.init()
-  -- Subscribe to events
-  EventBus.on(Events.SPAWN_LIST_CHANGE, SpawnSimulatorUI.onSpawnListChange)
-  EventBus.on(Events.SPAWN_SIMULATION_START, SpawnSimulatorUI.onSimulationStart)
-  EventBus.on(Events.SPAWN_SIMULATION_STOP, SpawnSimulatorUI.onSimulationStop)
+  -- UI will be created on demand
 end
 
 function SpawnSimulatorUI.terminate()
-  EventBus.off(Events.SPAWN_LIST_CHANGE, SpawnSimulatorUI.onSpawnListChange)
-  EventBus.off(Events.SPAWN_SIMULATION_START, SpawnSimulatorUI.onSimulationStart)
-  EventBus.off(Events.SPAWN_SIMULATION_STOP, SpawnSimulatorUI.onSimulationStop)
-
   if window then
     window:destroy()
     window = nil
@@ -53,34 +42,12 @@ function SpawnSimulatorUI.close()
   end
 end
 
-function SpawnSimulatorUI.onSpawnListChange(monsters, points)
-  SpawnSimulatorUI.refreshList()
-end
-
-function SpawnSimulatorUI.onSimulationStart()
-  if window then
-    local startBtn = window:getChildById('startButton')
-    local stopBtn = window:getChildById('stopButton')
-    if startBtn then startBtn:setEnabled(false) end
-    if stopBtn then stopBtn:setEnabled(true) end
-  end
-end
-
-function SpawnSimulatorUI.onSimulationStop()
-  if window then
-    local startBtn = window:getChildById('startButton')
-    local stopBtn = window:getChildById('stopButton')
-    if startBtn then startBtn:setEnabled(true) end
-    if stopBtn then stopBtn:setEnabled(false) end
-  end
-end
-
 function SpawnSimulatorUI.refreshList()
   if not window then return end
   
   monsterList:destroyChildren()
   
-  local monsters = ExplorerState.getMonsters()
+  local monsters = SpawnSimulator.monsters
   local mappedCount = 0
   
   for _, name in ipairs(monsters) do
@@ -116,7 +83,7 @@ function SpawnSimulatorUI.openOutfitPicker(monsterName)
   -- Open outfit window with callback
   MapExplorerOutfit.openWindowWithCallback(currentOutfit, function(outfit)
     SpawnSimulator.setMonsterOutfit(monsterName, outfit)
-    SpawnSimulatorUI.refreshList() -- Explicit refresh needed here as config change doesn't trigger SPAWN_LIST_CHANGE
+    SpawnSimulatorUI.refreshList()
   end)
 end
 
@@ -139,7 +106,7 @@ function SpawnSimulatorUI.onLoadSpawns()
       widget:setText(file)
       widget.onDoubleClick = function()
         if SpawnSimulator.loadSpawns(path .. file) then
-           -- SpawnSimulatorUI.refreshList() -- REMOVED: Handled by event
+           SpawnSimulatorUI.refreshList()
            SpawnSimulator.stopSimulation()
            picker:destroy()
         end

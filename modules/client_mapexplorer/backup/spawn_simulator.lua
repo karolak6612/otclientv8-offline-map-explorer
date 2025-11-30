@@ -1,11 +1,15 @@
 SpawnSimulator = {}
 
-local Config = dofile('config/explorer_config.lua')
-local ExplorerState = dofile('state/explorer_state.lua')
-
 -- Constants
-local SPAWN_CONFIG_FILE = Config.SPAWN_CONFIG_FILE
-local SIMULATION_INTERVAL = Config.SIMULATION_TICK_MS
+local SPAWN_CONFIG_FILE = "/settings/spawn_config.json"
+local SIMULATION_INTERVAL = 1000 -- Check movement every 1 second
+
+-- State
+SpawnSimulator.monsters = {} -- List of all monsters found in current spawn file
+SpawnSimulator.spawnPoints = {} -- List of {name, pos, radius, creatureUid}
+SpawnSimulator.globalConfig = {} -- Loaded from spawn_config.json
+SpawnSimulator.isSimulating = false
+SpawnSimulator.simulationEvent = nil
 
 function SpawnSimulator.init()
   g_logger.info("SpawnSimulator: Initializing...")
@@ -14,8 +18,8 @@ end
 
 function SpawnSimulator.terminate()
   SpawnSimulator.stopSimulation()
-  ExplorerState.setMonsters({})
-  ExplorerState.setSpawnPoints({})
+  SpawnSimulator.monsters = {}
+  SpawnSimulator.spawnPoints = {}
 end
 
 -- Config Management
@@ -26,24 +30,22 @@ function SpawnSimulator.loadGlobalConfig()
     end)
     if status then
       -- Normalize keys to lowercase
-      local config = {}
+      SpawnSimulator.globalConfig = {}
       for k, v in pairs(result) do
-        config[k:lower()] = v
+        SpawnSimulator.globalConfig[k:lower()] = v
       end
-      ExplorerState.setSpawnConfig(config)
     else
       g_logger.error("SpawnSimulator: Failed to load config: " .. tostring(result))
-      ExplorerState.setSpawnConfig({})
+      SpawnSimulator.globalConfig = {}
     end
   else
-    ExplorerState.setSpawnConfig({})
+    SpawnSimulator.globalConfig = {}
   end
 end
 
 function SpawnSimulator.saveGlobalConfig()
-  local config = ExplorerState.getSpawnConfig()
   local status, err = pcall(function()
-    g_resources.writeFileContents(SPAWN_CONFIG_FILE, json.encode(config))
+    g_resources.writeFileContents(SPAWN_CONFIG_FILE, json.encode(SpawnSimulator.globalConfig))
   end)
   if not status then
     g_logger.error("SpawnSimulator: Failed to save config: " .. tostring(err))
@@ -51,14 +53,11 @@ function SpawnSimulator.saveGlobalConfig()
 end
 
 function SpawnSimulator.getMonsterOutfit(name)
-  local config = ExplorerState.getSpawnConfig()
-  return config[name:lower()]
+  return SpawnSimulator.globalConfig[name:lower()]
 end
 
 function SpawnSimulator.setMonsterOutfit(name, outfit)
-  local config = ExplorerState.getSpawnConfig()
-  config[name:lower()] = outfit
-  ExplorerState.setSpawnConfig(config)
+  SpawnSimulator.globalConfig[name:lower()] = outfit
   SpawnSimulator.saveGlobalConfig()
 end
 
@@ -72,9 +71,16 @@ function SpawnSimulator.loadSpawns(filename)
   end
 
   local content = g_resources.readFileContents(filename)
+  local xml = nil
   
-  local monsters = {}
-  local spawnPoints = {}
+  -- Simple XML parser since we don't have a full DOM parser exposed easily
+  -- We'll use regex patterns to extract spawn data
+  -- <spawn centerx="2000" centery="1982" centerz="7" radius="1">
+  -- <monster name="demon skeleton" x="0" y="0" z="7" spawntime="0" direction="2" />
+  
+  SpawnSimulator.monsters = {}
+  SpawnSimulator.spawnPoints = {}
+  
   local uniqueMonsters = {}
   
   -- Iterate through <spawn> blocks using split
@@ -96,7 +102,7 @@ function SpawnSimulator.loadSpawns(filename)
           local name = mName:lower()
           uniqueMonsters[name] = true
           
-          table.insert(spawnPoints, {
+          table.insert(SpawnSimulator.spawnPoints, {
             name = name,
             pos = {x = cx + tonumber(mX), y = cy + tonumber(mY), z = cz},
             radius = r,
@@ -109,46 +115,38 @@ function SpawnSimulator.loadSpawns(filename)
   
   -- Convert set to list
   for name, _ in pairs(uniqueMonsters) do
-    table.insert(monsters, name)
+    table.insert(SpawnSimulator.monsters, name)
   end
-  table.sort(monsters)
+  table.sort(SpawnSimulator.monsters)
   
-  ExplorerState.setMonsters(monsters)
-  ExplorerState.setSpawnPoints(spawnPoints)
-  
-  g_logger.info("SpawnSimulator: Loaded " .. #spawnPoints .. " spawn points and " .. #monsters .. " unique monsters.")
+  g_logger.info("SpawnSimulator: Loaded " .. #SpawnSimulator.spawnPoints .. " spawn points and " .. #SpawnSimulator.monsters .. " unique monsters.")
   return true
 end
 
 -- Simulation
 function SpawnSimulator.startSimulation()
-  if ExplorerState.isSpawnSimulating() then return end
+  if SpawnSimulator.isSimulating then return end
   
   g_logger.info("SpawnSimulator: Starting simulation")
-  ExplorerState.setSpawnSimulating(true)
+  SpawnSimulator.isSimulating = true
   SpawnSimulator.spawnCreatures()
-  
-  local event = cycleEvent(SpawnSimulator.updateMovement, SIMULATION_INTERVAL)
-  ExplorerState.setSimulationEvent(event)
+  SpawnSimulator.simulationEvent = cycleEvent(SpawnSimulator.updateMovement, SIMULATION_INTERVAL)
 end
 
 function SpawnSimulator.stopSimulation()
-  if not ExplorerState.isSpawnSimulating() then return end
+  if not SpawnSimulator.isSimulating then return end
   
   g_logger.info("SpawnSimulator: Stopping simulation")
-  ExplorerState.setSpawnSimulating(false)
-  
-  local event = ExplorerState.getSimulationEvent()
-  if event then
-    removeEvent(event)
-    ExplorerState.setSimulationEvent(nil)
+  SpawnSimulator.isSimulating = false
+  if SpawnSimulator.simulationEvent then
+    removeEvent(SpawnSimulator.simulationEvent)
+    SpawnSimulator.simulationEvent = nil
   end
   SpawnSimulator.removeCreatures()
 end
 
 function SpawnSimulator.spawnCreatures()
-  local spawnPoints = ExplorerState.getSpawnPoints()
-  for _, point in ipairs(spawnPoints) do
+  for _, point in ipairs(SpawnSimulator.spawnPoints) do
     local outfit = SpawnSimulator.getMonsterOutfit(point.name)
     if outfit then
       local creature = Creature.create()
@@ -168,15 +166,13 @@ function SpawnSimulator.spawnCreatures()
       tile:addThing(creature, -1)
       
       point.creatureUid = creature:getId()
-      point.creature = creature -- Keep reference (Note: point is inside the state table, so this modifies state)
+      point.creature = creature -- Keep reference
     end
   end
-  -- We modified the points in place, so no need to setSpawnPoints again unless we want to trigger events (Phase 3)
 end
 
 function SpawnSimulator.removeCreatures()
-  local spawnPoints = ExplorerState.getSpawnPoints()
-  for _, point in ipairs(spawnPoints) do
+  for _, point in ipairs(SpawnSimulator.spawnPoints) do
     if point.creature then
       local tile = point.creature:getTile()
       if tile then
@@ -189,14 +185,13 @@ function SpawnSimulator.removeCreatures()
 end
 
 function SpawnSimulator.updateMovement()
-  if not ExplorerState.isSpawnSimulating() then return end
+  if not SpawnSimulator.isSimulating then return end
   
-  local spawnPoints = ExplorerState.getSpawnPoints()
-  for _, point in ipairs(spawnPoints) do
+  for _, point in ipairs(SpawnSimulator.spawnPoints) do
     local creature = point.creature
     if creature then
       -- Random chance to move
-      if math.random() < Config.CREATURE_MOVE_CHANCE then
+      if math.random(1, 3) == 1 then
         local currentPos = creature:getPosition()
         local dirs = {
           {x=0, y=-1}, -- North

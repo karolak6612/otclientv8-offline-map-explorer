@@ -1,9 +1,7 @@
 FileBrowser = {}
 
-local Config = dofile('config/explorer_config.lua')
-local ExplorerState = dofile('state/explorer_state.lua')
-
 local fileList = nil
+local currentPath = "/"
 local onFileSelectCallback = nil
 
 function FileBrowser.init(listWidget)
@@ -15,7 +13,7 @@ function FileBrowser.init(listWidget)
   end
   
   -- Initial path
-  FileBrowser.setPath(g_resources.getWorkDir() .. Config.DEFAULT_MAP_BROWSER_PATH)
+  FileBrowser.setPath(g_resources.getWorkDir() .. "data/things/")
 end
 
 function FileBrowser.setPath(path)
@@ -28,14 +26,15 @@ function FileBrowser.setPath(path)
     path = path .. "/"
   end
   
-  ExplorerState.setBrowserPath(path)
+  currentPath = path
+  g_settings.set('mapexplorer/lastPath', currentPath)
+  
   FileBrowser.refresh()
 end
 
 function FileBrowser.refresh()
   if not fileList then return end
   
-  local currentPath = ExplorerState.getBrowserPath()
   fileList:destroyChildren()
   
   -- Add ".." if not root
@@ -85,7 +84,6 @@ function FileBrowser.refresh()
 end
 
 function FileBrowser.goUp()
-  local currentPath = ExplorerState.getBrowserPath()
   -- Simple string manipulation to go up
   local parts = currentPath:split("/")
   local newPath = "/"
