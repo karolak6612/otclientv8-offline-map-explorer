@@ -1,25 +1,31 @@
-SpawnSimulator = {}
+--- SpawnService
+-- Manages spawn simulation, XML parsing, and creature lifecycle.
+-- @module SpawnService
+SpawnService = {}
 
+-- Dependencies (Global)
 local Config = _G.ExplorerConfig
 local ExplorerState = _G.ExplorerState
+local EventBus = _G.ExplorerEventBus
+local Events = _G.ExplorerEvents
 
 -- Constants
 local SPAWN_CONFIG_FILE = Config.SPAWN_CONFIG_FILE
 local SIMULATION_INTERVAL = Config.SIMULATION_TICK_MS
 
-function SpawnSimulator.init()
-  g_logger.info("SpawnSimulator: Initializing...")
-  SpawnSimulator.loadGlobalConfig()
+function SpawnService.init()
+  g_logger.info("SpawnService: init() called")
+  SpawnService.loadGlobalConfig()
 end
 
-function SpawnSimulator.terminate()
-  SpawnSimulator.stopSimulation()
+function SpawnService.terminate()
+  SpawnService.stopSimulation()
   ExplorerState.setMonsters({})
   ExplorerState.setSpawnPoints({})
 end
 
 -- Config Management
-function SpawnSimulator.loadGlobalConfig()
+function SpawnService.loadGlobalConfig()
   if g_resources.fileExists(SPAWN_CONFIG_FILE) then
     local status, result = pcall(function() 
       return json.decode(g_resources.readFileContents(SPAWN_CONFIG_FILE)) 
@@ -32,7 +38,7 @@ function SpawnSimulator.loadGlobalConfig()
       end
       ExplorerState.setSpawnConfig(config)
     else
-      g_logger.error("SpawnSimulator: Failed to load config: " .. tostring(result))
+      g_logger.error("SpawnService: Failed to load config: " .. tostring(result))
       ExplorerState.setSpawnConfig({})
     end
   else
@@ -40,34 +46,34 @@ function SpawnSimulator.loadGlobalConfig()
   end
 end
 
-function SpawnSimulator.saveGlobalConfig()
+function SpawnService.saveGlobalConfig()
   local config = ExplorerState.getSpawnConfig()
   local status, err = pcall(function()
     g_resources.writeFileContents(SPAWN_CONFIG_FILE, json.encode(config))
   end)
   if not status then
-    g_logger.error("SpawnSimulator: Failed to save config: " .. tostring(err))
+    g_logger.error("SpawnService: Failed to save config: " .. tostring(err))
   end
 end
 
-function SpawnSimulator.getMonsterOutfit(name)
+function SpawnService.getMonsterOutfit(name)
   local config = ExplorerState.getSpawnConfig()
   return config[name:lower()]
 end
 
-function SpawnSimulator.setMonsterOutfit(name, outfit)
+function SpawnService.setMonsterOutfit(name, outfit)
   local config = ExplorerState.getSpawnConfig()
   config[name:lower()] = outfit
   ExplorerState.setSpawnConfig(config)
-  SpawnSimulator.saveGlobalConfig()
+  SpawnService.saveGlobalConfig()
 end
 
 -- XML Parsing
-function SpawnSimulator.loadSpawns(filename)
-  g_logger.info("SpawnSimulator: Loading spawns from " .. filename)
+function SpawnService.loadSpawns(filename)
+  g_logger.info("SpawnService: Loading spawns from " .. filename)
   
   if not g_resources.fileExists(filename) then
-    g_logger.error("SpawnSimulator: File not found: " .. filename)
+    g_logger.error("SpawnService: File not found: " .. filename)
     return false
   end
 
@@ -116,26 +122,32 @@ function SpawnSimulator.loadSpawns(filename)
   ExplorerState.setMonsters(monsters)
   ExplorerState.setSpawnPoints(spawnPoints)
   
-  g_logger.info("SpawnSimulator: Loaded " .. #spawnPoints .. " spawn points and " .. #monsters .. " unique monsters.")
+  g_logger.info("SpawnService: Loaded " .. #spawnPoints .. " spawn points and " .. #monsters .. " unique monsters.")
+  
+  -- Emit event
+  EventBus.emit(Events.SPAWN_LIST_CHANGE, monsters, spawnPoints)
+  
   return true
 end
 
 -- Simulation
-function SpawnSimulator.startSimulation()
+function SpawnService.startSimulation()
   if ExplorerState.isSpawnSimulating() then return end
   
-  g_logger.info("SpawnSimulator: Starting simulation")
+  g_logger.info("SpawnService: Starting simulation")
   ExplorerState.setSpawnSimulating(true)
-  SpawnSimulator.spawnCreatures()
+  SpawnService.spawnCreatures()
   
-  local event = cycleEvent(SpawnSimulator.updateMovement, SIMULATION_INTERVAL)
+  local event = cycleEvent(SpawnService.updateMovement, SIMULATION_INTERVAL)
   ExplorerState.setSimulationEvent(event)
+  
+  EventBus.emit(Events.SPAWN_SIMULATION_START)
 end
 
-function SpawnSimulator.stopSimulation()
+function SpawnService.stopSimulation()
   if not ExplorerState.isSpawnSimulating() then return end
   
-  g_logger.info("SpawnSimulator: Stopping simulation")
+  g_logger.info("SpawnService: Stopping simulation")
   ExplorerState.setSpawnSimulating(false)
   
   local event = ExplorerState.getSimulationEvent()
@@ -143,13 +155,15 @@ function SpawnSimulator.stopSimulation()
     removeEvent(event)
     ExplorerState.setSimulationEvent(nil)
   end
-  SpawnSimulator.removeCreatures()
+  SpawnService.removeCreatures()
+  
+  EventBus.emit(Events.SPAWN_SIMULATION_STOP)
 end
 
-function SpawnSimulator.spawnCreatures()
+function SpawnService.spawnCreatures()
   local spawnPoints = ExplorerState.getSpawnPoints()
   for _, point in ipairs(spawnPoints) do
-    local outfit = SpawnSimulator.getMonsterOutfit(point.name)
+    local outfit = SpawnService.getMonsterOutfit(point.name)
     if outfit then
       local creature = Creature.create()
       creature:setName(point.name)
@@ -174,7 +188,7 @@ function SpawnSimulator.spawnCreatures()
   -- We modified the points in place, so no need to setSpawnPoints again unless we want to trigger events (Phase 3)
 end
 
-function SpawnSimulator.removeCreatures()
+function SpawnService.removeCreatures()
   local spawnPoints = ExplorerState.getSpawnPoints()
   for _, point in ipairs(spawnPoints) do
     if point.creature then
@@ -188,7 +202,7 @@ function SpawnSimulator.removeCreatures()
   end
 end
 
-function SpawnSimulator.updateMovement()
+function SpawnService.updateMovement()
   if not ExplorerState.isSpawnSimulating() then return end
   
   local spawnPoints = ExplorerState.getSpawnPoints()
@@ -242,3 +256,5 @@ function SpawnSimulator.updateMovement()
     end
   end
 end
+
+return SpawnService

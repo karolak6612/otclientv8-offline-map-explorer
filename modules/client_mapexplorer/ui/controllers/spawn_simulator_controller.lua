@@ -6,6 +6,7 @@ local Events = _G.ExplorerEvents
 local ExplorerState = _G.ExplorerState
 local Config = _G.ExplorerConfig
 local FileBrowserUtils = _G.FileBrowserUtils
+local SpawnService = _G.SpawnService
 
 local window = nil
 local monsterList = nil
@@ -22,11 +23,11 @@ function SpawnSimulatorController.init()
   stopButton = window:getChildById('stopButton')
   
   if startButton then
-    startButton.onClick = function() SpawnSimulator.startSimulation() end
+    startButton.onClick = function() SpawnService.startSimulation() end
   end
   
   if stopButton then
-    stopButton.onClick = function() SpawnSimulator.stopSimulation() end
+    stopButton.onClick = function() SpawnService.stopSimulation() end
   end
   
   EventBus.on(Events.SPAWN_LIST_CHANGE, SpawnSimulatorController.onSpawnListChange)
@@ -63,7 +64,7 @@ function SpawnSimulatorController.onSpawnListChange(monsters, points)
     local label = g_ui.createWidget('MonsterListLabel', monsterList)
     label:setText(name)
     
-    if SpawnSimulator.getMonsterOutfit(name) then
+    if SpawnService.getMonsterOutfit(name) then
       label:setColor('green')
     else
       label:setColor('red')
@@ -90,7 +91,7 @@ function SpawnSimulatorController.onLoadSpawns()
       local widget = g_ui.createWidget('FileBrowserItem', fileList)
       widget:setText(file)
       widget.onDoubleClick = function() 
-        SpawnSimulator.loadSpawns(dir .. file)
+        SpawnService.loadSpawns(dir .. file)
         picker:destroy()
       end
     end
@@ -98,11 +99,11 @@ function SpawnSimulatorController.onLoadSpawns()
 end
 
 function SpawnSimulatorController.onStartSimulation()
-  SpawnSimulator.startSimulation()
+  SpawnService.startSimulation()
 end
 
 function SpawnSimulatorController.onStopSimulation()
-  SpawnSimulator.stopSimulation()
+  SpawnService.stopSimulation()
 end
 
 function SpawnSimulatorController.onSimulationStart()

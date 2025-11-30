@@ -5,6 +5,7 @@ local EventBus = _G.ExplorerEventBus
 local Events = _G.ExplorerEvents
 local ExplorerState = _G.ExplorerState
 local Config = _G.ExplorerConfig
+local OutfitService = _G.OutfitService
 
 local panel = nil
 
@@ -18,7 +19,7 @@ function ToolsPanelController.init()
   
   local outfitButton = panel:getChildById('outfitButton')
   if outfitButton then
-    outfitButton.onClick = MapExplorerOutfit.openWindow
+    outfitButton.onClick = OutfitService.openWindow
   end
   
   ToolsPanelController.initPalette()

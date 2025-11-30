@@ -6,6 +6,8 @@ local Events = _G.ExplorerEvents
 local ExplorerState = _G.ExplorerState
 local FileBrowserWidget = _G.FileBrowserWidget
 
+local MapLoaderService = _G.MapLoaderService
+
 local window = nil
 local loadButton = nil
 
@@ -19,7 +21,7 @@ function MapBrowserController.init()
   loadButton = window:getChildById('loadButton')
   
   if loadButton then
-    loadButton.onClick = MapExplorerGame.loadSelectedMap
+    loadButton.onClick = MapLoaderService.loadSelectedMap
   end
   
   if fileList then
@@ -45,8 +47,7 @@ function MapBrowserController.onFileSelected(file)
   if file:ends(".otbm") then
     if loadButton then loadButton:setEnabled(true) end
     ExplorerState.setMapPath(file)
-    -- Update version and other logic via Game for now
-    MapExplorerGame.setSelectedMap(file) 
+    MapLoaderService.setSelectedMap(file) 
     g_logger.info("MapBrowserController: Selected " .. file)
   else
     if loadButton then loadButton:setEnabled(false) end
