@@ -50,10 +50,12 @@ _G.ExplorerState = {
     browserPath = "",
     browserVisible = false,
     toolsVisible = false,
+    scrollFloorChange = true,
   },
 }
 
 local ExplorerState = _G.ExplorerState
+
 
 -- ============================================
 -- Map State
@@ -243,6 +245,15 @@ function ExplorerState.setBrowserPath(path)
   ExplorerState._ui.browserPath = path
   g_settings.set(Config.SETTINGS_KEYS.LAST_BROWSE_PATH, path)
   EventBus.emit(Events.BROWSER_PATH_CHANGE, path)
+end
+
+function ExplorerState.isScrollFloorChangeEnabled()
+  return ExplorerState._ui.scrollFloorChange
+end
+
+function ExplorerState.setScrollFloorChangeEnabled(enabled)
+  ExplorerState._ui.scrollFloorChange = enabled
+  -- No event needed for now, just state check
 end
 
 return ExplorerState

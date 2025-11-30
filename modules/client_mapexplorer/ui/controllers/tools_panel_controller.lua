@@ -71,14 +71,34 @@ function ToolsPanelController.onGameStart()
     g_logger.info("ToolsPanelController: Calling setup()")
     explorerToolsPanel:setup()
     
+    -- Restore slider values from state
+    local lightScroll = explorerToolsPanel:recursiveGetChildById('lightScroll')
+    if lightScroll then lightScroll:setValue(ExplorerState.getLightIntensity()) end
+    
+    local speedScroll = explorerToolsPanel:recursiveGetChildById('speedScroll')
+    if speedScroll then speedScroll:setValue(ExplorerState.getPlayerSpeed()) end
+    
+    local zoomScroll = explorerToolsPanel:recursiveGetChildById('zoomSpeedScroll')
+    if zoomScroll then zoomScroll:setValue(ExplorerState.getZoomSpeed()) end
+    
+    -- Restore Checkbox state
+    local scrollCheck = explorerToolsPanel:recursiveGetChildById('scrollFloorCheck')
+    if scrollCheck then 
+      scrollCheck:setChecked(ExplorerState.isScrollFloorChangeEnabled()) 
+    end
+    
     g_logger.info("ToolsPanelController: Calling open()")
     explorerToolsPanel:open()
     
     g_logger.info("ToolsPanelController: Panel should now be visible")
-  else
-    -- Panel already exists, just show it
     g_logger.info("ToolsPanelController: Panel already exists, opening it")
     explorerToolsPanel:open()
+  end
+  
+  -- Hide close button to prevent accidental closing
+  local closeBtn = explorerToolsPanel:getChildById('closeButton')
+  if closeBtn then 
+    closeBtn:hide() 
   end
 end
 

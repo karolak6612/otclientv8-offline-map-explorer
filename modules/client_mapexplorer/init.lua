@@ -69,10 +69,20 @@ function MapExplorer.init()
             end
         end
         return true
-      elseif originalOnMouseWheel then
-        return originalOnMouseWheel(widget, mousePos, direction)
+      else
+        -- Mouse Scroll -> Change Floor (PageUp/Down behavior)
+        -- Only if enabled in ExplorerState
+        if ExplorerState.isScrollFloorChangeEnabled() then
+          if direction == MouseWheelUp then
+            PlayerService.floorDown() -- Inverted: Up -> Down (Z+1)
+          else
+            PlayerService.floorUp()   -- Inverted: Down -> Up (Z-1)
+          end
+          return true
+        end
+        -- If disabled, let default behavior happen (or return false)
+        return false
       end
-      return false
     end
     
     -- Hook Map Click (Ctrl + Click Teleport)

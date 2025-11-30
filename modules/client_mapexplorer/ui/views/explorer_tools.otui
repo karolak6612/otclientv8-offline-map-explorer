@@ -151,3 +151,16 @@ MiniWindow
       !text: tr('Spawn Simulator')
       margin-top: 5
       @onClick: MapExplorer.toggleSpawnSimulator()
+
+    CheckBox
+      id: scrollFloorCheck
+      !text: tr('Scroll to change floor')
+      margin-top: 10
+      checked: true
+      @onCheckChange: modules.client_mapexplorer.ExplorerState.setScrollFloorChangeEnabled(self:isChecked())
+
+    Button
+      id: openMapButton
+      !text: tr('Open Map')
+      margin-top: 5
+      @onClick: MapExplorer.show()
