@@ -931,6 +931,7 @@ void Client::registerLuaFunctions()
     g_lua.bindClassMemberFunction<UIMap>("lockVisibleFloor", &UIMap::lockVisibleFloor);
     g_lua.bindClassMemberFunction<UIMap>("unlockVisibleFloor", &UIMap::unlockVisibleFloor);
     g_lua.bindClassMemberFunction<UIMap>("setVisibleDimension", &UIMap::setVisibleDimension);
+    g_lua.bindClassMemberFunction<UIMap>("setDrawBuffer", &UIMap::setDrawBuffer);
     g_lua.bindClassMemberFunction<UIMap>("setDrawFlags", &UIMap::setDrawFlags);
     g_lua.bindClassMemberFunction<UIMap>("setDrawTexts", &UIMap::setDrawTexts);
     g_lua.bindClassMemberFunction<UIMap>("setDrawNames", &UIMap::setDrawNames);

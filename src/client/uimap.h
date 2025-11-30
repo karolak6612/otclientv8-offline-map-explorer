@@ -52,6 +52,7 @@ public:
     void lockVisibleFloor(int floor) { m_mapView->lockFirstVisibleFloor(floor); }
     void unlockVisibleFloor() { m_mapView->unlockFirstVisibleFloor(); }
     void setVisibleDimension(const Size& visibleDimension);
+    void setDrawBuffer(const Size& drawBuffer) { m_mapView->setDrawBuffer(drawBuffer); }
     void setDrawFlags(Otc::DrawFlags drawFlags) { m_mapView->setDrawFlags(drawFlags); }
     void setDrawTexts(bool enable) { m_mapView->setDrawTexts(enable); }
     void setDrawNames(bool enable) { m_mapView->setDrawNames(enable); }

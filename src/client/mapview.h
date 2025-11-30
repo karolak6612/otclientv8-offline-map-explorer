@@ -64,6 +64,7 @@ public:
 
     // map dimension related
     void setVisibleDimension(const Size& visibleDimension);
+    void setDrawBuffer(const Size& drawBuffer);
     void optimizeForSize(const Size & visibleSize);
     Size getVisibleDimension() { return m_visibleDimension; }
     Point getVisibleCenterOffset() { return m_visibleCenterOffset; }
@@ -141,6 +142,7 @@ private:
     int m_floorFading = 500;
     TexturePtr m_crosshair = nullptr;
     Size m_drawDimension;
+    Size m_drawBuffer;
     Size m_visibleDimension;
     Size m_optimizedSize;
     Point m_virtualCenterOffset;

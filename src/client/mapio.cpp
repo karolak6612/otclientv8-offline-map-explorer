@@ -219,8 +219,9 @@ void Map::loadOtbm(const std::string& fileName)
                     if(waypointPos.isValid() && !name.empty() && m_waypoints.find(waypointPos) == m_waypoints.end())
                         m_waypoints.insert(std::make_pair(waypointPos, name));
                 }
-            } else
-                stdext::throw_exception(stdext::format("Unknown map data node %d", (int)mapDataType));
+            } else {
+                g_logger.warning(stdext::format("Unknown map data node %d", (int)mapDataType));
+            }
         }
 
         fin->close();

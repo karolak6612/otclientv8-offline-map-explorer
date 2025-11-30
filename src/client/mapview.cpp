@@ -52,6 +52,7 @@ MapView::MapView()
     m_cachedFirstVisibleFloor = 7;
     m_cachedLastVisibleFloor = 7;
     m_minimumAmbientLight = 0;
+    m_drawBuffer = Size(3, 3);
     m_optimizedSize = Size(g_map.getAwareRange().horizontal(), g_map.getAwareRange().vertical()) * g_sprites.spriteSize();
 
     setVisibleDimension(Size(15, 11));
@@ -450,7 +451,7 @@ void MapView::updateGeometry(const Size& visibleDimension, const Size& optimized
 {
     m_multifloor = true;
     m_visibleDimension = visibleDimension;
-    m_drawDimension = visibleDimension + Size(3, 3);
+    m_drawDimension = visibleDimension + m_drawBuffer;
     m_virtualCenterOffset = (m_drawDimension / 2 - Size(1, 1)).toPoint();
     m_visibleCenterOffset = m_virtualCenterOffset;
     m_optimizedSize = m_drawDimension * g_sprites.spriteSize();
@@ -495,6 +496,12 @@ void MapView::setVisibleDimension(const Size& visibleDimension)
     }
 
     updateGeometry(visibleDimension, m_optimizedSize);
+}
+
+void MapView::setDrawBuffer(const Size& drawBuffer)
+{
+    m_drawBuffer = drawBuffer;
+    updateGeometry(m_visibleDimension, m_optimizedSize);
 }
 
 void MapView::optimizeForSize(const Size& visibleSize)
