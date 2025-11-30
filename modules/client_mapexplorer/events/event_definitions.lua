@@ -1,7 +1,10 @@
--- Event Definitions for MapExplorer
--- Centralized constants for all event names
+-- Event definitions for MapExplorer module
 
-local EventDefinitions = {
+if _G.ExplorerEvents then
+  return _G.ExplorerEvents
+end
+
+_G.ExplorerEvents = {
   -- Map Events
   MAP_LOADED = "MapLoaded",           -- (mapPath, version)
   MAP_CLEARED = "MapCleared",         -- ()
@@ -26,4 +29,4 @@ local EventDefinitions = {
   SPAWN_LIST_CHANGE = "SpawnListChange",           -- (monsters, points)
 }
 
-return EventDefinitions
+return _G.ExplorerEvents

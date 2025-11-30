@@ -1,7 +1,7 @@
 SpawnSimulator = {}
 
-local Config = dofile('config/explorer_config.lua')
-local ExplorerState = dofile('state/explorer_state.lua')
+local Config = _G.ExplorerConfig
+local ExplorerState = _G.ExplorerState
 
 -- Constants
 local SPAWN_CONFIG_FILE = Config.SPAWN_CONFIG_FILE

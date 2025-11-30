@@ -3,9 +3,9 @@
 -- Phase 2: Centralize State Management
 -- Phase 3: Event Bus Integration
 
-local Config = dofile('/modules/client_mapexplorer/config/explorer_config.lua')
-local EventBus = dofile('/modules/client_mapexplorer/events/event_bus.lua')
-local Events = dofile('/modules/client_mapexplorer/events/event_definitions.lua')
+local Config = _G.ExplorerConfig
+local EventBus = _G.ExplorerEventBus
+local Events = _G.ExplorerEvents
 
 if _G.ExplorerState then
   return _G.ExplorerState

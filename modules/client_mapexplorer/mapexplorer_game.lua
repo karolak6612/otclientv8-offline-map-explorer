@@ -1,9 +1,9 @@
 MapExplorerGame = {}
 
-local Config = dofile('config/explorer_config.lua')
-local ExplorerState = dofile('state/explorer_state.lua')
-local EventBus = dofile('events/event_bus.lua')
-local Events = dofile('events/event_definitions.lua')
+local Config = _G.ExplorerConfig
+local ExplorerState = _G.ExplorerState
+local EventBus = _G.ExplorerEventBus
+local Events = _G.ExplorerEvents
 
 function MapExplorerGame.init()
   g_logger.info("MapExplorerGame: init() called")
@@ -51,6 +51,18 @@ function MapExplorerGame.init()
     end
   end
   -- Subscribe to events
+  g_logger.info("MapExplorerGame: Subscribing to events...")
+  g_logger.info("Events: " .. tostring(Events))
+  if Events then
+    g_logger.info("Events.LIGHT_CHANGE: " .. tostring(Events.LIGHT_CHANGE))
+  end
+  g_logger.info("Handler: " .. tostring(MapExplorerGame.onLightChangeEvent))
+
+  if not Events then
+    g_logger.error("MapExplorerGame: Events is nil! Aborting subscription.")
+    return
+  end
+
   EventBus.on(Events.LIGHT_CHANGE, MapExplorerGame.onLightChangeEvent)
   EventBus.on(Events.PLAYER_SPEED_CHANGE, MapExplorerGame.onSpeedChangeEvent)
   EventBus.on(Events.NO_CLIP_CHANGE, MapExplorerGame.onNoClipChangeEvent)

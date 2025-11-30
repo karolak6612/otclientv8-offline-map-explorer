@@ -1,7 +1,7 @@
 MapExplorerOutfit = {}
 
 -- Phase 1: Import configuration module
-local Config = dofile('config/explorer_config.lua')
+local Config = _G.ExplorerConfig
 
 function MapExplorerOutfit.openWindow()
   g_logger.info("MapExplorerOutfit: openWindow called")

@@ -1,8 +1,11 @@
 -- Configuration for MapExplorer module
 -- All magic numbers and constants centralized here
--- Phase 1: Extract Configuration
 
-local ExplorerConfig = {
+if _G.ExplorerConfig then
+  return _G.ExplorerConfig
+end
+
+_G.ExplorerConfig = {
   -- Rendering Settings
   DRAW_BUFFER_SIZE = 7,              -- Chunk buffer size (prevents black tiles on zoom)
   DEFAULT_VISIBLE_WIDTH = 15,        -- Default viewport width in tiles
@@ -67,4 +70,4 @@ local ExplorerConfig = {
   }
 }
 
-return ExplorerConfig
+return _G.ExplorerConfig
