@@ -8,28 +8,15 @@ local Config = _G.ExplorerConfig
 local FileBrowserUtils = _G.FileBrowserUtils
 local SpawnService = _G.SpawnService
 
-local window = nil
+local spawnPanel = nil
 local monsterList = nil
 local startButton = nil
 local stopButton = nil
 
 function SpawnSimulatorController.init()
-  -- Note: Assuming OTUI path will be updated or resolved correctly
-  window = g_ui.displayUI('/modules/client_mapexplorer/ui/views/spawn_simulator') 
-  window:hide()
+  g_logger.info("SpawnSimulatorController: init()")
   
-  monsterList = window:getChildById('monsterList')
-  startButton = window:getChildById('startButton')
-  stopButton = window:getChildById('stopButton')
-  
-  if startButton then
-    startButton.onClick = function() SpawnService.startSimulation() end
-  end
-  
-  if stopButton then
-    stopButton.onClick = function() SpawnService.stopSimulation() end
-  end
-  
+  -- Don't create panel on init - wait for user to toggle it
   EventBus.on(Events.SPAWN_LIST_CHANGE, SpawnSimulatorController.onSpawnListChange)
   EventBus.on(Events.SPAWN_SIMULATION_START, SpawnSimulatorController.onSimulationStart)
   EventBus.on(Events.SPAWN_SIMULATION_STOP, SpawnSimulatorController.onSimulationStop)
@@ -40,19 +27,74 @@ function SpawnSimulatorController.terminate()
   EventBus.off(Events.SPAWN_SIMULATION_START, SpawnSimulatorController.onSimulationStart)
   EventBus.off(Events.SPAWN_SIMULATION_STOP, SpawnSimulatorController.onSimulationStop)
   
-  if window then
-    window:destroy()
-    window = nil
+  if spawnPanel then
+    spawnPanel:destroy()
+    spawnPanel = nil
   end
 end
 
 function SpawnSimulatorController.toggle()
-  if window:isVisible() then
-    window:hide()
+  if not spawnPanel then
+    SpawnSimulatorController.show()
+  elseif spawnPanel:isVisible() then
+    spawnPanel:close()
   else
-    window:show()
-    window:raise()
-    window:focus()
+    spawnPanel:open()
+  end
+end
+
+function SpawnSimulatorController.show()
+  g_logger.info("SpawnSimulatorController: show() - Creating dockable panel")
+  
+  local gameInterface = modules.game_interface
+  
+  if not spawnPanel then
+    -- Find first available left panel slot (Explorer Tools should be in slot 1)
+    local targetPanel = gameInterface.getLeftPanel(2)
+    if not targetPanel then
+      -- Create second left panel if it doesn't exist
+      gameInterface.addLeftPanel()
+      targetPanel = gameInterface.getLeftPanel(2)
+    end
+    
+    g_logger.info("SpawnSimulatorController: Loading UI from OTUI file")
+    -- Load MiniWindow into panel
+    spawnPanel = g_ui.loadUI('/modules/client_mapexplorer/ui/views/spawn_simulator_dockable', targetPanel)
+    
+    if not spawnPanel then
+      g_logger.error("SpawnSimulatorController: Failed to load UI!")
+      return
+    end
+    
+    g_logger.info("SpawnSimulatorController: UI loaded, getting child widgets")
+    -- Get widget references (use recursiveGetChildById for nested widgets)
+    monsterList = spawnPanel:recursiveGetChildById('monsterList')
+    startButton = spawnPanel:recursiveGetChildById('startButton')
+    stopButton = spawnPanel:recursiveGetChildById('stopButton')
+    
+    -- Setup button callbacks
+    if startButton then
+      startButton.onClick = function() SpawnService.startSimulation() end
+      g_logger.info("SpawnSimulatorController: Start button callback set")
+    end
+    
+    if stopButton then
+      stopButton.onClick = function() SpawnService.stopSimulation() end
+      g_logger.info("SpawnSimulatorController: Stop button callback set")
+    end
+    
+    -- Setup and open the panel
+    g_logger.info("SpawnSimulatorController: Calling setup()")
+    spawnPanel:setup()
+    
+    g_logger.info("SpawnSimulatorController: Calling open()")
+    spawnPanel:open()
+    
+    g_logger.info("SpawnSimulatorController: Panel should now be visible")
+  else
+    -- Panel already exists, just show it
+    g_logger.info("SpawnSimulatorController: Panel already exists, opening it")
+    spawnPanel:open()
   end
 end
 
@@ -114,6 +156,11 @@ end
 function SpawnSimulatorController.onSimulationStop()
   if startButton then startButton:setEnabled(true) end
   if stopButton then stopButton:setEnabled(false) end
+end
+
+function SpawnSimulatorController.onClose()
+  -- Called when user closes panel via close button
+  g_logger.info("SpawnSimulatorController: Panel closed by user")
 end
 
 return SpawnSimulatorController

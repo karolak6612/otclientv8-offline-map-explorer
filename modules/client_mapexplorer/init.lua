@@ -212,9 +212,9 @@ end
 MapExplorer.onTeleport = function()
     -- This should be handled by ToolsPanelController, but keeping for safety
     if MapExplorerUI and MapExplorerUI.explorerPanel then
-      local x = tonumber(MapExplorerUI.explorerPanel:getChildById('posX'):getText())
-      local y = tonumber(MapExplorerUI.explorerPanel:getChildById('posY'):getText())
-      local z = tonumber(MapExplorerUI.explorerPanel:getChildById('posZ'):getText())
+      local x = tonumber(MapExplorerUI.explorerPanel:recursiveGetChildById('posX'):getText())
+      local y = tonumber(MapExplorerUI.explorerPanel:recursiveGetChildById('posY'):getText())
+      local z = tonumber(MapExplorerUI.explorerPanel:recursiveGetChildById('posZ'):getText())
       if x and y and z then
         PlayerService.teleportTo({x=x, y=y, z=z})
       end

@@ -1,0 +1,110 @@
+MonsterListLabel < Label
+  font: verdana-11px-monochrome
+  background-color: alpha
+  text-offset: 2 0
+  focusable: true
+  height: 14
+  phantom: false
+  text-align: left
+  
+  $focus:
+    background-color: #ffffff22
+
+MiniWindow
+  id: spawnSimulatorPanel
+  !text: tr('Spawn Simulator')
+  height: 350
+  @onClose: modules.client_mapexplorer.SpawnSimulatorController.onClose()
+  &save: true
+  &autoOpen: false
+
+  MiniWindowContents
+    padding: 5
+    layout: verticalBox
+
+    Label
+      id: statusLabel
+      !text: tr('Mapped: 0 / 0')
+      margin-top: 5
+
+    Panel
+      height: 240
+      layout: anchor
+      
+      TextList
+        id: monsterList
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        vertical-scrollbar: monsterListScroll
+
+      VerticalScrollBar
+        id: monsterListScroll
+        anchors.top: monsterList.top
+        anchors.bottom: monsterList.bottom
+        anchors.right: monsterList.right
+        step: 14
+        pixels-scroll: true
+
+    Panel
+      height: 60
+      layout: anchor
+      
+      Button
+        id: loadButton
+        !text: tr('Load Spawns')
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        height: 20
+        @onClick: modules.client_mapexplorer.SpawnSimulatorUI.onLoadSpawns()
+
+      Button
+        id: startButton
+        !text: tr('Start')
+        anchors.left: parent.left
+        anchors.top: prev.bottom
+        margin-top: 5
+        width: 90
+        @onClick: modules.client_mapexplorer.SpawnSimulatorUI.onStartSimulation()
+
+      Button
+        id: stopButton
+        !text: tr('Stop')
+        anchors.left: prev.right
+        anchors.top: prev.top
+        margin-left: 5
+        width: 90
+        @onClick: modules.client_mapexplorer.SpawnSimulatorUI.onStopSimulation()
+
+SpawnFilePicker < MainWindow
+  id: spawnFilePicker
+  !text: tr('Select Spawn File')
+  size: 250 300
+  @onEscape: self:destroy()
+
+  TextList
+    id: fileList
+    anchors.top: parent.top
+    anchors.left: parent.left
+    anchors.right: parent.right
+    anchors.bottom: closeButton.top
+    margin-bottom: 10
+    vertical-scrollbar: fileListScroll
+
+  VerticalScrollBar
+    id: fileListScroll
+    anchors.top: fileList.top
+    anchors.bottom: fileList.bottom
+    anchors.right: fileList.right
+    step: 14
+    pixels-scroll: true
+
+  Button
+    id: closeButton
+    !text: tr('Cancel')
+    anchors.bottom: parent.bottom
+    anchors.right: parent.right
+    width: 60
+    @onClick: self:getParent():destroy()

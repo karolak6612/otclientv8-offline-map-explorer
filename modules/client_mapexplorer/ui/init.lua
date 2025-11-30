@@ -31,6 +31,9 @@ _G.MapExplorerUI.setStatus = function(text) g_logger.info("MapExplorerUI Status:
 _G.MapExplorerUI.showTools = ToolsPanelController.onMapLoaded
 _G.MapExplorerUI.hideTools = ToolsPanelController.onMapCleared
 
+-- Expose ToolsPanelController globally for OTUI callbacks
+_G.ToolsPanelController = ToolsPanelController
+
 -- SpawnSimulator Globals
 _G.SpawnSimulatorUI = {}
 _G.SpawnSimulatorUI.init = function() end -- Handled by MapExplorerUI.init

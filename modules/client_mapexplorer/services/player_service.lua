@@ -12,6 +12,12 @@ local Events = _G.ExplorerEvents
 function PlayerService.init()
   g_logger.info("PlayerService: init() called")
   
+  -- Ensure no-clip is disabled by default
+  local player = g_game.getLocalPlayer()
+  if player then
+    player:setNoClipMode(false)
+  end
+  
   -- Bind keys
   g_keyboard.bindKeyPress('PageUp', PlayerService.floorUp)
   g_keyboard.bindKeyPress('PageDown', PlayerService.floorDown)
